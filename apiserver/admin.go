@@ -251,6 +251,14 @@ func (a *admin) authenticate(ctx context.Context, req params.LoginRequest) (*aut
 		}
 	}
 
+	// Client credentials are intended to be used by JIMM acting as an auth
+	// server in front of Juju controllers, juju should reject these login
+	// requests early with a suitable error messsage.
+	if req.ClientID != "" || req.ClientSecret != "" {
+		err := errors.NotSupportedf("client credentials login")
+		return nil, errors.Trace(err)
+	}
+
 	// If the login attempt is for a migrated model,
 	// a.root.model will be nil as the model document does not exist on this
 	// controller and a.root.modelUUID cannot be resolved.

@@ -52,6 +52,12 @@ type Info struct {
 	// will be used.
 	CACert string
 
+	// ClientID and ClientSecret are client-credentials used as part of
+	// an OAuth flow. These are currently only used by JIMM which acts as
+	// a front-end auth gateway for Juju controllers.
+	ClientID     string
+	ClientSecret string
+
 	// ModelTag holds the model tag for the model we are
 	// trying to connect to. If this is empty, a controller-only
 	// login will be made.
@@ -284,7 +290,7 @@ type Connection interface {
 
 	// These are a bit off -- ServerVersion is apparently not known until after
 	// Login()? Maybe evidence of need for a separate AuthenticatedConnection..?
-	Login(name names.Tag, password, nonce string, ms []macaroon.Slice) error
+	Login(name names.Tag, password, nonce string, ms []macaroon.Slice, clientID, clientSecret string) error
 	ServerVersion() (version.Number, bool)
 
 	// APICaller provides the facility to make API calls directly.

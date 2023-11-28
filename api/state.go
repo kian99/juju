@@ -31,7 +31,7 @@ import (
 // or macaroons. Subsequent requests on the state will act as that entity.
 // This method is usually called automatically by Open. The machine nonce
 // should be empty unless logging in as a machine agent.
-func (st *state) Login(tag names.Tag, password, nonce string, macaroons []macaroon.Slice) error {
+func (st *state) Login(tag names.Tag, password, nonce string, macaroons []macaroon.Slice, clientID, clientSecret string) error {
 	var result params.LoginResult
 	request := &params.LoginRequest{
 		AuthTag:       tagToString(tag),
@@ -41,6 +41,8 @@ func (st *state) Login(tag names.Tag, password, nonce string, macaroons []macaro
 		BakeryVersion: bakery.LatestVersion,
 		CLIArgs:       utils.CommandString(os.Args...),
 		ClientVersion: jujuversion.Current.String(),
+		ClientID:      clientID,
+		ClientSecret:  clientSecret,
 	}
 	// If we are in developer mode, add the stack location as user data to the
 	// login request. This will allow the apiserver to connect connection ids

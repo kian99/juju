@@ -139,6 +139,10 @@ type state struct {
 	macaroons []macaroon.Slice
 	nonce     string
 
+	// clietID and clientID secret hold the OAuth login credentials.
+	clientID     string
+	clientSecret string
+
 	// serverRootAddress holds the cached API server address and port used
 	// to login.
 	serverRootAddress string
@@ -271,6 +275,8 @@ func Open(info *Info, opts DialOpts) (Connection, error) {
 		password:     info.Password,
 		macaroons:    info.Macaroons,
 		nonce:        info.Nonce,
+		clientID:     info.ClientID,
+		clientSecret: info.ClientSecret,
 		tlsConfig:    dialResult.tlsConfig,
 		bakeryClient: bakeryClient,
 		modelTag:     info.ModelTag,
@@ -328,7 +334,7 @@ func PerferredHost(info *Info) string {
 func loginWithContext(ctx context.Context, st *state, info *Info) error {
 	result := make(chan error, 1)
 	go func() {
-		result <- st.Login(info.Tag, info.Password, info.Nonce, info.Macaroons)
+		result <- st.Login(info.Tag, info.Password, info.Nonce, info.Macaroons, info.ClientID, info.ClientSecret)
 	}()
 	select {
 	case err := <-result:

@@ -116,7 +116,7 @@ func (s *stateSuite) TestAPIHostPortsDoesNotIncludeConnectionProxy(c *gc.C) {
 		Closed:        make(chan struct{}),
 		Proxier:       proxytest.NewMockTunnelProxier(),
 	})
-	err := testState.Login(info.Tag, info.Password, "", nil)
+	err := testState.Login(info.Tag, info.Password, "", nil, "", "")
 	c.Assert(err, jc.ErrorIsNil)
 
 	hostPortList := testState.APIHostPorts()
@@ -136,7 +136,7 @@ func (s *stateSuite) TestTags(c *gc.C) {
 	modelTag, ok := apistate.ModelTag()
 	c.Check(ok, jc.IsTrue)
 	c.Check(modelTag, gc.Equals, model.ModelTag())
-	err = apistate.Login(tag, password, "", nil)
+	err = apistate.Login(tag, password, "", nil, "", "")
 	c.Assert(err, jc.ErrorIsNil)
 	// Now that we've logged in, ModelTag should still be the same.
 	modelTag, ok = apistate.ModelTag()
@@ -218,7 +218,7 @@ func (s *stateSuite) TestLoginMacaroonInvalidId(c *gc.C) {
 	defer apistate.Close()
 	mac, err := macaroon.New([]byte("root-key"), []byte("id"), "juju", macaroon.LatestVersion)
 	c.Assert(err, jc.ErrorIsNil)
-	err = apistate.Login(tag, "", "", []macaroon.Slice{{mac}})
+	err = apistate.Login(tag, "", "", []macaroon.Slice{{mac}}, "", "")
 	c.Assert(err, gc.ErrorMatches, "interaction required but not possible")
 }
 

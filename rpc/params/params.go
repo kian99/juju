@@ -592,6 +592,8 @@ type Creds struct {
 // valid macaroons and macaroon authentication is configured,
 // the LoginResult will contain a macaroon that when
 // discharged, may allow access.
+// ClientID and ClientSecret are used for OAuth flows by JIMM acting as a
+// auth gateway in front of Juju controllers.
 type LoginRequest struct {
 	AuthTag       string           `json:"auth-tag"`
 	Credentials   string           `json:"credentials"`
@@ -602,6 +604,8 @@ type LoginRequest struct {
 	CLIArgs       string           `json:"cli-args,omitempty"`
 	UserData      string           `json:"user-data"`
 	ClientVersion string           `json:"client-version,omitempty"`
+	ClientID      string           `json:"client-id,omitempty"`
+	ClientSecret  string           `json:"client-secret,omitempty"`
 }
 
 // LoginRequestCompat holds credentials for identifying an entity to the Login v1
