@@ -1,4 +1,4 @@
-module github.com/juju/juju
+module github.com/kian99/juju
 
 go 1.21
 
