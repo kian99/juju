@@ -1087,6 +1087,31 @@ func (s *AddressSuite) TestIsValidAddressConfigTypeWithInvalidValues(c *gc.C) {
 	c.Check(result, jc.IsFalse)
 }
 
+func (s *AddressSuite) TestNewPathAddress(c *gc.C) {
+	type test struct {
+		value        string
+		path         string
+		expectedPath string
+	}
+
+	tests := []test{{
+		value:        "127.0.0.1",
+		path:         "foo/bar",
+		expectedPath: "foo/bar",
+	}, {
+		value:        "127.0.0.1",
+		path:         "/foo/bar",
+		expectedPath: "/foo/bar",
+	}}
+
+	for i, t := range tests {
+		c.Logf("test %d: %s %s", i, t.value, t.path)
+		addr := network.NewMachineAddress(t.value, network.WithPath(t.path))
+		c.Check(addr.Value, gc.Equals, t.value)
+		c.Check(addr.Path, gc.Equals, t.expectedPath)
+	}
+}
+
 // spaceAddressCandidate implements the SpaceAddressCandidate
 // interface from the core/network package.
 type spaceAddressCandidate struct {

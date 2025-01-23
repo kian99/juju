@@ -104,6 +104,10 @@ type Address interface {
 	// Host returns the value for the host-name/IP address.
 	Host() string
 
+	// AddressPath returns a path segment for the address
+	// when the address is not hosted on the root of a domain.
+	AddressPath() string
+
 	// AddressType returns the type of the address.
 	AddressType() AddressType
 
@@ -193,6 +197,9 @@ type MachineAddress struct {
 	// Value is an IP address or hostname.
 	Value string
 
+	// PathSegment is a path segment for the address when the address requires it.
+	Path string
+
 	// Type indicates the form of the address value;
 	// IPv4, IPv6 or host-name.
 	Type AddressType
@@ -215,6 +222,11 @@ type MachineAddress struct {
 // Host returns the value for the host-name/IP address.
 func (a MachineAddress) Host() string {
 	return a.Value
+}
+
+// AddressPath returns the path segment for the address.
+func (a MachineAddress) AddressPath() string {
+	return a.Path
 }
 
 // AddressType returns the type of the address.

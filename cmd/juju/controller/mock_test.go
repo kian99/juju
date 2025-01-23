@@ -4,6 +4,8 @@
 package controller_test
 
 import (
+	"net/url"
+
 	"github.com/juju/names/v5"
 
 	"github.com/juju/juju/api"
@@ -17,7 +19,7 @@ type mockAPIConnection struct {
 	api.Connection
 
 	// addr is returned by Addr.
-	addr string
+	addr url.URL
 
 	// controllerTag is returned by ControllerTag.
 	controllerTag names.ControllerTag
@@ -33,7 +35,7 @@ func (*mockAPIConnection) Close() error {
 	return nil
 }
 
-func (m *mockAPIConnection) Addr() string {
+func (m *mockAPIConnection) Addr() url.URL {
 	return m.addr
 }
 

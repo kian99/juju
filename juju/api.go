@@ -6,6 +6,7 @@ package juju
 import (
 	"fmt"
 	"net"
+	"net/url"
 	"reflect"
 
 	"github.com/juju/errors"
@@ -134,6 +135,7 @@ func NewAPIConnection(args NewAPIConnectionParams) (_ api.Connection, err error)
 	if v, ok := st.ServerVersion(); ok {
 		agentVersion = v.String()
 	}
+
 	params := UpdateControllerParams{
 		AgentVersion:      agentVersion,
 		AddrConnectedTo:   st.Addr(),
@@ -296,7 +298,7 @@ type UpdateControllerParams struct {
 
 	// AddrConnectedTo (when set) is an API address that has been recently
 	// connected to.
-	AddrConnectedTo string
+	AddrConnectedTo url.URL
 
 	// IPAddrConnected to (when set) is the IP address of AddrConnectedTo
 	// that has been recently connected to.
@@ -337,12 +339,12 @@ func updateControllerDetailsFromLogin(
 	controllerName string, details *jujuclient.ControllerDetails,
 	params UpdateControllerParams,
 ) error {
-	hostPorts := usableHostPorts(params.CurrentHostPorts).Strings()
+	// Exclude a scheme in the controller URLs to avoid changes to user's store.
+	hostPorts := usableHostPorts(params.CurrentHostPorts).CanonicalURLs("")
 	// Move the connected-to host (if present) to the front of the address list.
-	host, _, err := net.SplitHostPort(params.AddrConnectedTo)
-	if err == nil {
-		moveToFront(host, hostPorts)
-	}
+	host := params.AddrConnectedTo.Hostname()
+	moveToFront(host, hostPorts)
+
 	// Move the IP address used to the front of the DNS cache entry
 	// (if present) so that it will be the first address dialed.
 	ipHost, _, err := net.SplitHostPort(params.IPAddrConnectedTo)

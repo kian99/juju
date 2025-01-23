@@ -54,6 +54,24 @@ func (s *HostPortSuite) TestFilterUnusableHostPorts(c *gc.C) {
 	c.Assert(result, jc.DeepEquals, expected)
 }
 
+func (*HostPortSuite) TestNewHostPortWithPath(c *gc.C) {
+	hps := network.NewMachineHostPorts(1234,
+		"0.1.2.3", "10.0.1.2/bar", "fc00::1:/bar/baz")
+	c.Assert(hps.HostPorts(), gc.HasLen, 3)
+
+	c.Assert(hps[0].Value, gc.Equals, "0.1.2.3")
+	c.Assert(hps[0].Path, gc.Equals, "")
+	c.Assert(hps[0].NetPort, gc.Equals, network.NetPort(1234))
+
+	c.Assert(hps[1].Value, gc.Equals, "10.0.1.2")
+	c.Assert(hps[1].Path, gc.Equals, "bar")
+	c.Assert(hps[1].NetPort, gc.Equals, network.NetPort(1234))
+
+	c.Assert(hps[2].Value, gc.Equals, "fc00::1:")
+	c.Assert(hps[2].Path, gc.Equals, "bar/baz")
+	c.Assert(hps[2].NetPort, gc.Equals, network.NetPort(1234))
+}
+
 func (*HostPortSuite) TestCollapseToHostPorts(c *gc.C) {
 	servers := []network.MachineHostPorts{
 		network.NewMachineHostPorts(1234,
@@ -107,28 +125,28 @@ func (*HostPortSuite) TestParseHostPortsErrors(c *gc.C) {
 		err   string
 	}{{
 		input: "",
-		err:   `cannot parse "" as address:port: .*missing port in address.*`,
+		err:   `cannot parse "" as address:port\[/path\]: missing host`,
 	}, {
 		input: " ",
-		err:   `cannot parse " " as address:port: .*missing port in address.*`,
+		err:   `cannot parse " " as address:port\[/path\]: parse .* invalid character .* in host name`,
 	}, {
 		input: ":",
-		err:   `cannot parse ":" port: strconv.(ParseInt|Atoi): parsing "": invalid syntax`,
+		err:   `cannot parse ":" as address:port\[/path\]: missing port`,
 	}, {
 		input: "host",
-		err:   `cannot parse "host" as address:port: .*missing port in address.*`,
+		err:   `cannot parse "host" as address:port\[/path\]: missing port`,
 	}, {
 		input: "host:port",
-		err:   `cannot parse "host:port" port: strconv.(ParseInt|Atoi): parsing "port": invalid syntax`,
+		err:   `cannot parse "host:port" as address:port\[/path\]: parse .*`,
 	}, {
-		input: "::1",
-		err:   `cannot parse "::1" as address:port: .*too many colons in address.*`,
+		input: "[::1]",
+		err:   `cannot parse "\[::1\]" as address:port\[/path\]: missing port`,
 	}, {
 		input: "1.2.3.4",
-		err:   `cannot parse "1.2.3.4" as address:port: .*missing port in address.*`,
+		err:   `cannot parse "1.2.3.4" as address:port\[/path\]: missing port`,
 	}, {
 		input: "1.2.3.4:foo",
-		err:   `cannot parse "1.2.3.4:foo" port: strconv.(ParseInt|Atoi): parsing "foo": invalid syntax`,
+		err:   `cannot parse "1.2.3.4:foo" as address:port\[/path\]: parse .* invalid port .* after host`,
 	}} {
 		c.Logf("test %d: input %q", i, test.input)
 		// First test all error cases with a single argument.
@@ -136,10 +154,35 @@ func (*HostPortSuite) TestParseHostPortsErrors(c *gc.C) {
 		c.Check(err, gc.ErrorMatches, test.err)
 		c.Check(hps, gc.IsNil)
 	}
+	c.Logf("test mixed valid and invalid args")
 	// Finally, test with mixed valid and invalid args.
 	hps, err := network.ParseProviderHostPorts("1.2.3.4:42", "[fc00::1]:12", "foo")
-	c.Assert(err, gc.ErrorMatches, `cannot parse "foo" as address:port: .*missing port in address.*`)
+	c.Assert(err, gc.ErrorMatches, `cannot parse "foo" as address:port\[/path\]: missing port`)
 	c.Assert(hps, gc.IsNil)
+}
+
+func (*HostPortSuite) TestParseHostPortsWithPath(c *gc.C) {
+	hps, err := network.ParseProviderHostPorts("1.2.3.4:42/bar/baz", "[fc00::1]:12/bar", "foo:123/bar")
+	c.Assert(err, gc.IsNil)
+	c.Assert(hps[0].Path, gc.Equals, "/bar/baz")
+	c.Assert(hps[0].NetPort, gc.Equals, network.NetPort(42))
+	c.Assert(hps[0].Value, gc.Equals, "1.2.3.4")
+
+	c.Assert(hps[1].Path, gc.Equals, "/bar")
+	c.Assert(hps[1].NetPort, gc.Equals, network.NetPort(12))
+	c.Assert(hps[1].Value, gc.Equals, "fc00::1")
+
+	c.Assert(hps[2].Path, gc.Equals, "/bar")
+	c.Assert(hps[2].NetPort, gc.Equals, network.NetPort(123))
+	c.Assert(hps[2].Value, gc.Equals, "foo")
+}
+
+func (*HostPortSuite) TestParseHostPortsWithSchema(c *gc.C) {
+	hps, err := network.ParseProviderHostPorts("https://1.2.3.4:42/bar/baz")
+	c.Assert(err, gc.IsNil)
+	c.Assert(hps[0].Path, gc.Equals, "/bar/baz")
+	c.Assert(hps[0].NetPort, gc.Equals, network.NetPort(42))
+	c.Assert(hps[0].Value, gc.Equals, "1.2.3.4")
 }
 
 func (*HostPortSuite) TestParseProviderHostPortsSuccess(c *gc.C) {
@@ -539,4 +582,26 @@ func (s *HostPortSuite) TestSpaceHostPortsToProviderHostPorts(c *gc.C) {
 	hps[3].SpaceID = "3"
 	_, err = hps.ToProviderHostPorts(stubLookup{})
 	c.Assert(err, jc.Satisfies, errors.IsNotFound)
+}
+
+func (s *HostPortSuite) TestCanonicalURL(c *gc.C) {
+	hps, err := network.ParseProviderHostPorts("1.2.3.4:42/bar/baz")
+	c.Assert(err, gc.IsNil)
+	url := network.CanonicalURL(hps[0], "https")
+	c.Assert(url.String(), gc.Equals, "https://1.2.3.4:42/bar/baz")
+}
+
+func (s *HostPortSuite) TestCanonicalURLs(c *gc.C) {
+	hps, err := network.ParseProviderHostPorts("1.2.3.4:42/bar/baz", "foo:42/bar/baz")
+	c.Assert(err, gc.IsNil)
+
+	res := hps.HostPorts().CanonicalURLs("https")
+	c.Assert(res, gc.HasLen, 2)
+	c.Assert(res[0], gc.Equals, "https://1.2.3.4:42/bar/baz")
+	c.Assert(res[1], gc.Equals, "https://foo:42/bar/baz")
+
+	res = hps.HostPorts().CanonicalURLs("")
+	c.Assert(res, gc.HasLen, 2)
+	c.Assert(res[0], gc.Equals, "1.2.3.4:42/bar/baz")
+	c.Assert(res[1], gc.Equals, "foo:42/bar/baz")
 }

@@ -4,6 +4,8 @@
 package juju_test
 
 import (
+	"net/url"
+
 	"github.com/juju/names/v5"
 	"github.com/juju/version/v2"
 
@@ -18,7 +20,7 @@ type mockAPIState struct {
 	// If non-nil, close is called when the Close method is called.
 	close func(api.Connection) error
 
-	addr          string
+	addr          url.URL
 	ipAddr        string
 	apiHostPorts  []network.MachineHostPorts
 	modelTag      string
@@ -42,7 +44,7 @@ const (
 func mockedAPIState(flags mockedStateFlags) *mockAPIState {
 	hasHostPort := flags&mockedHostPort == mockedHostPort
 	hasModelTag := flags&mockedModelTag == mockedModelTag
-	addr := ""
+	addr := url.URL{}
 
 	apiHostPorts := []network.MachineHostPorts{}
 	if hasHostPort {
@@ -79,7 +81,7 @@ func (s *mockAPIState) IPAddr() string {
 	return s.ipAddr
 }
 
-func (s *mockAPIState) Addr() string {
+func (s *mockAPIState) Addr() url.URL {
 	return s.addr
 }
 

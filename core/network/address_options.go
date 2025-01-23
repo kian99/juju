@@ -11,12 +11,21 @@ type AddressMutator interface {
 	// SetCIDR sets the CIDR property of the address.
 	SetCIDR(string)
 
+	// SetPath sets the path property of the address.
+	SetPath(string)
+
 	// SetSecondary indicates whether this address is not the
 	// primary address of the device it is associated with.
 	SetSecondary(bool)
 
 	// SetConfigType indicates how this address was configured.
 	SetConfigType(AddressConfigType)
+}
+
+// SetPath (AddressMutator) sets the input
+// path on the address receiver.
+func (a *MachineAddress) SetPath(path string) {
+	a.Path = path
 }
 
 // SetScope (AddressMutator) sets the input
@@ -41,6 +50,14 @@ func (a *MachineAddress) SetSecondary(isSecondary bool) {
 // AddressConfigType on the address receiver.
 func (a *MachineAddress) SetConfigType(configType AddressConfigType) {
 	a.ConfigType = configType
+}
+
+// WithPath returns a functional option that can
+// be used to set the input path on an address.
+func WithPath(path string) func(AddressMutator) {
+	return func(a AddressMutator) {
+		a.SetPath(path)
+	}
 }
 
 // WithScope returns a functional option that can

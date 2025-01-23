@@ -631,7 +631,8 @@ func (s *JujuConnSuite) setUpConn(c *gc.C) {
 	// Make sure the controller store has the controller api endpoint address set
 	ctrl, err := s.ControllerStore.ControllerByName(ControllerName)
 	c.Assert(err, jc.ErrorIsNil)
-	ctrl.APIEndpoints = []string{s.APIState.APIHostPorts()[0][0].String()}
+	endpointWithScheme := network.CanonicalURL(s.APIState.APIHostPorts()[0][0], "wss")
+	ctrl.APIEndpoints = []string{strings.TrimPrefix(endpointWithScheme.String(), "wss://")}
 	err = s.ControllerStore.UpdateController(ControllerName, *ctrl)
 	c.Assert(err, jc.ErrorIsNil)
 	err = s.ControllerStore.SetCurrentController(ControllerName)

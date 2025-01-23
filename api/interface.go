@@ -328,7 +328,7 @@ type Connection interface {
 	Close() error
 
 	// Addr returns the address used to connect to the API server.
-	Addr() string
+	Addr() url.URL
 
 	// IPAddr returns the IP address used to connect to the API server.
 	IPAddr() string

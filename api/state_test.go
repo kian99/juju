@@ -111,7 +111,7 @@ func (s *stateSuite) TestAPIHostPortsDoesNotIncludeConnectionProxy(c *gc.C) {
 	testState := api.NewTestingState(api.TestingStateParams{
 		RPCConnection: conn,
 		Clock:         &fakeClock{},
-		Address:       "localhost:1234",
+		Address:       "wss://localhost:1234",
 		Broken:        broken,
 		Closed:        make(chan struct{}),
 		Proxier:       proxytest.NewMockTunnelProxier(),

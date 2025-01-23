@@ -5,6 +5,8 @@ package network
 
 import (
 	"net"
+	"net/url"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -47,6 +49,23 @@ func (hps HostPorts) Strings() []string {
 	return result
 }
 
+// CanonicalURLs returns the HostPorts as a slice of strings
+// after converting them to their full canonical URL form.
+// An empty scheme will result in URLs without a scheme
+// e.g. "host:port/path" as opposed to "scheme://host:port/path".
+func (hps HostPorts) CanonicalURLs(scheme string) []string {
+	result := make([]string, len(hps))
+	for i, addr := range hps {
+		u := CanonicalURL(addr, scheme)
+		res := u.String()
+		if scheme == "" {
+			res = strings.TrimPrefix(res, "//")
+		}
+		result[i] = res
+	}
+	return result
+}
+
 // Unique returns a copy of the receiver HostPorts with duplicate endpoints
 // removed. Note that this only applies to dial addresses; spaces are ignored.
 func (hps HostPorts) Unique() HostPorts {
@@ -77,10 +96,23 @@ func (hps HostPorts) PrioritizedForScope(getMatcher ScopeMatchFunc) []string {
 	return out
 }
 
+// CanonicalURL returns a URL value for the input HostPort,
+// that includes the the provided scheme.
+func CanonicalURL(a HostPort, scheme string) url.URL {
+	hostPort := net.JoinHostPort(a.Host(), strconv.Itoa(a.Port()))
+	u := url.URL{
+		Scheme: scheme,
+		Host:   hostPort,
+		Path:   a.AddressPath(),
+	}
+	return u
+}
+
 // DialAddress returns a string value for the input HostPort,
 // suitable for passing as an argument to net.Dial.
 func DialAddress(a HostPort) string {
-	return net.JoinHostPort(a.Host(), strconv.Itoa(a.Port()))
+	hostPort := net.JoinHostPort(a.Host(), strconv.Itoa(a.Port()))
+	return hostPort
 }
 
 // NetPort represents a network port.
@@ -125,30 +157,57 @@ func (hp MachineHostPorts) HostPorts() HostPorts {
 
 // NewMachineHostPorts creates a list of MachineHostPorts
 // from each given string address and port.
+// The hostPort representation of a URL did not previously accommodate for a path
+// so the format of addresses is not a canonical URL in order to keep the
+// function backwards compatible. Normally addresses are expected to be in the
+// form "host[:port][/path]" but we have a separate parameter for the port
+// while the addresses are expected to be "host[/path]"
+// The path is then extracted from the address if present, i.e.
+// "host/my/path" is split into "host" and "my/path".
 func NewMachineHostPorts(port int, addresses ...string) MachineHostPorts {
 	hps := make(MachineHostPorts, len(addresses))
 	for i, addr := range addresses {
+		host, path, _ := strings.Cut(addr, "/")
 		hps[i] = MachineHostPort{
-			MachineAddress: NewMachineAddress(addr),
+			MachineAddress: NewMachineAddress(host, WithPath(path)),
 			NetPort:        NetPort(port),
 		}
 	}
 	return hps
 }
 
+var hasSchemaRegex = regexp.MustCompile(`^[a-zA-Z]+:\/\/`)
+
 // ParseMachineHostPort converts a string containing a
 // single host and port value to a MachineHostPort.
+// The input string may also contain a path segment.
 func ParseMachineHostPort(hp string) (*MachineHostPort, error) {
-	host, port, err := net.SplitHostPort(hp)
-	if err != nil {
-		return nil, errors.Annotatef(err, "cannot parse %q as address:port", hp)
+	originalHp := hp
+	if !hasSchemaRegex.MatchString(hp) {
+		// Add a schema if one is not present to avoid parsing ambiguity in url.Parse.
+		hp = "schema://" + hp
 	}
-	numPort, err := strconv.Atoi(port)
+	errMsgf := "cannot parse %q as address:port[/path]"
+	url, err := url.Parse(hp)
 	if err != nil {
-		return nil, errors.Annotatef(err, "cannot parse %q port", hp)
+		return nil, errors.Annotatef(err, errMsgf, originalHp)
+	}
+	switch {
+	case url.Scheme == "":
+		// The input doesn't require a schema so don't mention the schema in the error.
+		// It is only added to aid url.Parse.
+		return nil, errors.Errorf(errMsgf, originalHp)
+	case url.Host == "":
+		return nil, errors.Errorf(errMsgf+": missing host", originalHp)
+	case url.Port() == "":
+		return nil, errors.Errorf(errMsgf+": missing port", originalHp)
+	}
+	numPort, err := strconv.Atoi(url.Port())
+	if err != nil {
+		return nil, errors.Annotatef(err, "cannot parse %q port", url.Port())
 	}
 	return &MachineHostPort{
-		MachineAddress: NewMachineAddress(host),
+		MachineAddress: NewMachineAddress(url.Hostname(), WithPath(url.Path)),
 		NetPort:        NetPort(numPort),
 	}, nil
 }

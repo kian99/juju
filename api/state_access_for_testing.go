@@ -3,6 +3,8 @@
 
 package api
 
+import "net/url"
+
 // The functions below break through the Connection abstraction to access or
 // modify part of the underlying state.  They need to be exported because they
 // are used in tests for the client facade client.
@@ -10,7 +12,7 @@ package api
 // SetServerAddressForTesting allows changing the URL to the internal API server that
 // AddLocalCharm uses in order to test NotImplementedError.  Hopefully it will
 // soon be gone forever.
-func SetServerAddressForTesting(c Connection, scheme, addr string) {
+func SetServerAddressForTesting(c Connection, scheme string, addr url.URL) {
 	c.(*state).serverScheme = scheme
 	c.(*state).addr = addr
 }
