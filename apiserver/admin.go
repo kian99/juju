@@ -116,7 +116,7 @@ func (a *admin) login(ctx context.Context, req params.LoginRequest, loginVersion
 	if err != nil {
 		return fail, errors.Trace(err)
 	}
-	pServers := make([]network.HostPorts, len(hostPorts))
+	pServers := make([]network.HostPorts[network.HostPort], len(hostPorts))
 	for i, hps := range hostPorts {
 		pServers[i] = hps.HostPorts()
 	}

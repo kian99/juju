@@ -21,14 +21,24 @@ type HostPort interface {
 	Port() int
 }
 
-// HostPorts derives from a slice of HostPort
-// and allows bulk operations on its members.
-type HostPorts []HostPort
+// HostPortWithPath extends HostPort for addresses that include a path
+// segment, consider scenarios where an address points to a loadbalancer.
+type HostPortWithPath interface {
+	HostPort
+	AddressPath() string
+}
+
+// The generic type HostPorts[T] allows instaniating
+// a slice of HostPort or HostPortWithPath and
+// reusing the several methods on both.
+type HostPorts[T HostPort] []T
+
+type HostPortsWithPath []HostPortWithPath
 
 // FilterUnusable returns a copy of the receiver HostPorts after removing
 // any addresses unlikely to be usable (ScopeMachineLocal or ScopeLinkLocal).
-func (hps HostPorts) FilterUnusable() HostPorts {
-	filtered := make(HostPorts, 0, len(hps))
+func (hps HostPorts[T]) FilterUnusable() HostPorts[T] {
+	filtered := make(HostPorts[T], 0, len(hps))
 	for _, addr := range hps {
 		switch addr.AddressScope() {
 		case ScopeMachineLocal, ScopeLinkLocal:
@@ -41,7 +51,7 @@ func (hps HostPorts) FilterUnusable() HostPorts {
 
 // Strings returns the HostPorts as a slice of
 // strings suitable for passing to net.Dial.
-func (hps HostPorts) Strings() []string {
+func (hps HostPorts[T]) Strings() []string {
 	result := make([]string, len(hps))
 	for i, addr := range hps {
 		result[i] = DialAddress(addr)
@@ -53,7 +63,7 @@ func (hps HostPorts) Strings() []string {
 // after converting them to their full canonical URL form.
 // An empty scheme will result in URLs without a scheme
 // e.g. "host:port/path" as opposed to "scheme://host:port/path".
-func (hps HostPorts) CanonicalURLs(scheme string) []string {
+func (hps HostPortsWithPath) CanonicalURLs(scheme string) []string {
 	result := make([]string, len(hps))
 	for i, addr := range hps {
 		u := CanonicalURL(addr, scheme)
@@ -68,16 +78,22 @@ func (hps HostPorts) CanonicalURLs(scheme string) []string {
 
 // Unique returns a copy of the receiver HostPorts with duplicate endpoints
 // removed. Note that this only applies to dial addresses; spaces are ignored.
-func (hps HostPorts) Unique() HostPorts {
-	results := make([]HostPort, 0, len(hps))
+func (hps HostPorts[T]) Unique() HostPorts[T] {
+	results := make(HostPorts[T], 0, len(hps))
 	seen := set.NewStrings()
 
 	for _, addr := range hps {
+		switch v := any(addr).(type) {
+		case HostPortWithPath:
+			url := CanonicalURL(v, "")
+			if seen.Contains(url.String()) {
+				continue
+			}
+		}
 		da := DialAddress(addr)
 		if seen.Contains(da) {
 			continue
 		}
-
 		seen.Add(da)
 		results = append(results, addr)
 	}
@@ -87,7 +103,7 @@ func (hps HostPorts) Unique() HostPorts {
 // PrioritizedForScope orders the HostPorts by best match for the input scope
 // matching function and returns them in NetAddr form.
 // If there are no suitable addresses then an empty slice is returned.
-func (hps HostPorts) PrioritizedForScope(getMatcher ScopeMatchFunc) []string {
+func (hps HostPorts[T]) PrioritizedForScope(getMatcher ScopeMatchFunc) []string {
 	indexes := indexesByScopeMatch(hps, getMatcher)
 	out := make([]string, len(indexes))
 	for i, index := range indexes {
@@ -98,7 +114,7 @@ func (hps HostPorts) PrioritizedForScope(getMatcher ScopeMatchFunc) []string {
 
 // CanonicalURL returns a URL value for the input HostPort,
 // that includes the the provided scheme.
-func CanonicalURL(a HostPort, scheme string) url.URL {
+func CanonicalURL(a HostPortWithPath, scheme string) url.URL {
 	hostPort := net.JoinHostPort(a.Host(), strconv.Itoa(a.Port()))
 	u := url.URL{
 		Scheme: scheme,
@@ -147,8 +163,8 @@ func (hp MachineHostPort) GoString() string {
 type MachineHostPorts []MachineHostPort
 
 // HostPorts returns the slice as a new slice of the HostPort indirection.
-func (hp MachineHostPorts) HostPorts() HostPorts {
-	addrs := make(HostPorts, len(hp))
+func (hp MachineHostPorts) HostPorts() HostPorts[HostPort] {
+	addrs := make(HostPorts[HostPort], len(hp))
 	for i, hp := range hp {
 		addrs[i] = hp
 	}
@@ -214,8 +230,20 @@ func ParseMachineHostPort(hp string) (*MachineHostPort, error) {
 
 // CollapseToHostPorts returns the input nested slice of MachineHostPort
 // as a flat slice of HostPort, preserving the order.
-func CollapseToHostPorts(serversHostPorts []MachineHostPorts) HostPorts {
-	var collapsed HostPorts
+func CollapseToHostPorts(serversHostPorts []MachineHostPorts) HostPorts[HostPort] {
+	var collapsed HostPorts[HostPort]
+	for _, hps := range serversHostPorts {
+		for _, hp := range hps {
+			collapsed = append(collapsed, hp)
+		}
+	}
+	return collapsed
+}
+
+// CollapseToHostPortsWithPath returns the input nested slice of MachineHostPort
+// as a flat slice of HostPortWithPath, preserving the order.
+func CollapseToHostPortsWithPath(serversHostPorts []MachineHostPorts) HostPorts[HostPortWithPath] {
+	var collapsed HostPorts[HostPortWithPath]
 	for _, hps := range serversHostPorts {
 		for _, hp := range hps {
 			collapsed = append(collapsed, hp)
@@ -257,8 +285,8 @@ func (hp ProviderHostPorts) Addresses() ProviderAddresses {
 }
 
 // HostPorts returns the slice as a new slice of the HostPort indirection.
-func (hp ProviderHostPorts) HostPorts() HostPorts {
-	addrs := make(HostPorts, len(hp))
+func (hp ProviderHostPorts) HostPorts() HostPorts[HostPort] {
+	addrs := make(HostPorts[HostPort], len(hp))
 	for i, hp := range hp {
 		addrs[i] = hp
 	}
@@ -333,8 +361,8 @@ func NewSpaceHostPorts(port int, addresses ...string) SpaceHostPorts {
 }
 
 // HostPorts returns the slice as a new slice of the HostPort indirection.
-func (hps SpaceHostPorts) HostPorts() HostPorts {
-	addrs := make(HostPorts, len(hps))
+func (hps SpaceHostPorts) HostPorts() HostPorts[HostPort] {
+	addrs := make(HostPorts[HostPort], len(hps))
 	for i, hp := range hps {
 		addrs[i] = hp
 	}

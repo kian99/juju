@@ -654,7 +654,7 @@ func FromProviderHostPort(nhp network.ProviderHostPort) HostPort {
 
 // FromHostsPorts is a helper to create a parameter
 // out of the network type, here for a nested slice of HostPort.
-func FromHostsPorts(nhpm []network.HostPorts) [][]HostPort {
+func FromHostsPorts(nhpm []network.HostPorts[network.HostPort]) [][]HostPort {
 	hpm := make([][]HostPort, len(nhpm))
 	for i, nhps := range nhpm {
 		hpm[i] = FromHostPorts(nhps)
@@ -664,7 +664,7 @@ func FromHostsPorts(nhpm []network.HostPorts) [][]HostPort {
 
 // FromHostPorts is a helper to create a parameter
 // out of the network type, here for a slice of HostPort.
-func FromHostPorts(nhps network.HostPorts) []HostPort {
+func FromHostPorts(nhps network.HostPorts[network.HostPort]) []HostPort {
 	hps := make([]HostPort, len(nhps))
 	for i, nhp := range nhps {
 		hps[i] = FromHostPort(nhp)

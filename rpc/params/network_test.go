@@ -386,7 +386,7 @@ func (s *NetworkSuite) TestHostPortConversion(c *gc.C) {
 		},
 	}
 
-	hps := make([]network.HostPorts, len(mHPs))
+	hps := make([]network.HostPorts[network.HostPort], len(mHPs))
 	for i, mHP := range mHPs {
 		hps[i] = mHP.HostPorts()
 	}

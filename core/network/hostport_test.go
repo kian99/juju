@@ -225,7 +225,7 @@ func (*HostPortSuite) TestAddressesWithPort(c *gc.C) {
 	}})
 }
 
-func (s *HostPortSuite) assertHostPorts(c *gc.C, actual network.HostPorts, expected ...string) {
+func (s *HostPortSuite) assertHostPorts(c *gc.C, actual network.HostPorts[network.HostPort], expected ...string) {
 	c.Assert(actual.Strings(), jc.DeepEquals, expected)
 }
 
@@ -585,23 +585,23 @@ func (s *HostPortSuite) TestSpaceHostPortsToProviderHostPorts(c *gc.C) {
 }
 
 func (s *HostPortSuite) TestCanonicalURL(c *gc.C) {
-	hps, err := network.ParseProviderHostPorts("1.2.3.4:42/bar/baz")
+	hp, err := network.ParseMachineHostPort("1.2.3.4:42/bar/baz")
 	c.Assert(err, gc.IsNil)
-	url := network.CanonicalURL(hps[0], "https")
+	url := network.CanonicalURL(hp, "https")
 	c.Assert(url.String(), gc.Equals, "https://1.2.3.4:42/bar/baz")
 }
 
 func (s *HostPortSuite) TestCanonicalURLs(c *gc.C) {
-	hps, err := network.ParseProviderHostPorts("1.2.3.4:42/bar/baz", "foo:42/bar/baz")
+	hps := network.HostPortsWithPath{}
+	hp1, err := network.ParseMachineHostPort("1.2.3.4:42/bar/baz")
+	c.Assert(err, gc.IsNil)
+	hp2, err := network.ParseMachineHostPort("foo:42/bar/baz")
 	c.Assert(err, gc.IsNil)
 
-	res := hps.HostPorts().CanonicalURLs("https")
+	hps = append(hps, hp1, hp2)
+
+	res := hps.CanonicalURLs("https")
 	c.Assert(res, gc.HasLen, 2)
 	c.Assert(res[0], gc.Equals, "https://1.2.3.4:42/bar/baz")
 	c.Assert(res[1], gc.Equals, "https://foo:42/bar/baz")
-
-	res = hps.HostPorts().CanonicalURLs("")
-	c.Assert(res, gc.HasLen, 2)
-	c.Assert(res[0], gc.Equals, "1.2.3.4:42/bar/baz")
-	c.Assert(res[1], gc.Equals, "foo:42/bar/baz")
 }

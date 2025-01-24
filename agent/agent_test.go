@@ -654,7 +654,7 @@ func (*suite) TestSetAPIHostPorts(c *gc.C) {
 	server4[0].Scope = network.ScopeUnknown
 	server4[1].Scope = network.ScopeUnknown
 
-	conf.SetAPIHostPorts([]network.HostPorts{
+	conf.SetAPIHostPorts([]network.HostPorts[network.HostPort]{
 		network.SpaceAddressesWithPort(server1, 1111).HostPorts(),
 		network.SpaceAddressesWithPort(server2, 2222).HostPorts(),
 		network.SpaceAddressesWithPort(server3, 3333).HostPorts(),
@@ -677,7 +677,7 @@ func (*suite) TestSetAPIHostPortsErrorOnEmpty(c *gc.C) {
 	conf, err := agent.NewAgentConfig(attributeParams)
 	c.Assert(err, jc.ErrorIsNil)
 
-	err = conf.SetAPIHostPorts([]network.HostPorts{})
+	err = conf.SetAPIHostPorts([]network.HostPorts[network.HostPort]{})
 	c.Assert(err, jc.Satisfies, errors.IsBadRequest)
 }
 

@@ -31,7 +31,7 @@ type ReachableChecker interface {
 	// and tries to do an SSH key negotiation. The first successful negotiation
 	// that includes one of the public keys supplied will be returned. If none
 	// of them can be validated, then an error will be returned.
-	FindHost(hostPorts network.HostPorts, publicKeys []string) (network.HostPort, error)
+	FindHost(hostPorts network.HostPorts[network.HostPort], publicKeys []string) (network.HostPort, error)
 }
 
 // NewReachableChecker creates a ReachableChecker that can be used to check for
@@ -194,7 +194,7 @@ type reachableChecker struct {
 // if the SSH server's negotiated public key is in our allowed set. The first
 // address to successfully negotiate will be returned. If none of them succeed,
 // and error will be returned.
-func (r *reachableChecker) FindHost(hostPorts network.HostPorts, publicKeys []string) (network.HostPort, error) {
+func (r *reachableChecker) FindHost(hostPorts network.HostPorts[network.HostPort], publicKeys []string) (network.HostPort, error) {
 	uniqueHPs := hostPorts.Unique()
 	successful := make(chan network.HostPort)
 	stop := make(chan struct{})

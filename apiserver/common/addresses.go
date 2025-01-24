@@ -45,7 +45,7 @@ func (a *APIAddresser) APIHostPorts() (params.APIHostPortsResult, error) {
 	}
 
 	// Convert the SpaceHostPorts to the HostPorts indirection.
-	pSvrs := make([]network.HostPorts, len(sSvrs))
+	pSvrs := make([]network.HostPorts[network.HostPort], len(sSvrs))
 	for i, sHPs := range sSvrs {
 		pSvrs[i] = sHPs.HostPorts()
 	}

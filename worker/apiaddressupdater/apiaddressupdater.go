@@ -25,7 +25,7 @@ type APIAddresser interface {
 // APIAddressSetter is an interface that is provided to NewAPIAddressUpdater
 // whose SetAPIHostPorts method will be invoked whenever address changes occur.
 type APIAddressSetter interface {
-	SetAPIHostPorts(servers []corenetwork.HostPorts) error
+	SetAPIHostPorts(servers []corenetwork.HostPorts[corenetwork.HostPort]) error
 }
 
 // Config defines the operation of a Worker.
@@ -111,7 +111,7 @@ func (c *APIAddressUpdater) Handle(_ <-chan struct{}) error {
 	// Here, we indirect them because they are ultimately just stored as dial
 	// address strings. This could be re-evaluated in the future if the space
 	// information becomes worthwhile to agents.
-	hpsToSet := make([]corenetwork.HostPorts, len(hps))
+	hpsToSet := make([]corenetwork.HostPorts[corenetwork.HostPort], len(hps))
 	for i, hps := range hps {
 		hpsToSet[i] = hps.HostPorts()
 	}

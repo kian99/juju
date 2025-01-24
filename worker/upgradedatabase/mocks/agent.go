@@ -833,7 +833,7 @@ func (mr *MockConfigSetterMockRecorder) QueryTracingThreshold() *gomock.Call {
 }
 
 // SetAPIHostPorts mocks base method.
-func (m *MockConfigSetter) SetAPIHostPorts(arg0 []network.HostPorts) error {
+func (m *MockConfigSetter) SetAPIHostPorts(arg0 []network.HostPorts[network.HostPort]) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "SetAPIHostPorts", arg0)
 	ret0, _ := ret[0].(error)

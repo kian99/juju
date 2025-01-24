@@ -41,7 +41,7 @@ func (s *SSHReachableHostPortSuite) TestAllUnreachable(c *gc.C) {
 }
 
 func (s *SSHReachableHostPortSuite) TestReachableInvalidPublicKey(c *gc.C) {
-	hostPorts := network.HostPorts{
+	hostPorts := network.HostPorts[network.HostPort]{
 		// We use Key2, but are looking for Pub1
 		testSSHServer(c, s, sshtesting.SSHKey2),
 	}

@@ -255,8 +255,8 @@ func connectionInfo(args NewAPIConnectionParams) (*api.Info, *jujuclient.Control
 
 // usableHostPorts returns the input MachineHostPort slice as DialAddresses
 // with unusable and non-unique values filtered out.
-func usableHostPorts(hps []network.MachineHostPorts) network.HostPorts {
-	collapsed := network.CollapseToHostPorts(hps)
+func usableHostPorts(hps []network.MachineHostPorts) network.HostPorts[network.HostPortWithPath] {
+	collapsed := network.CollapseToHostPortsWithPath(hps)
 	return collapsed.FilterUnusable().Unique()
 }
 
@@ -340,7 +340,8 @@ func updateControllerDetailsFromLogin(
 	params UpdateControllerParams,
 ) error {
 	// Exclude a scheme in the controller URLs to avoid changes to user's store.
-	hostPorts := usableHostPorts(params.CurrentHostPorts).CanonicalURLs("")
+	hpsWithPath := append(network.HostPortsWithPath{}, usableHostPorts(params.CurrentHostPorts)...)
+	hostPorts := hpsWithPath.CanonicalURLs("")
 	// Move the connected-to host (if present) to the front of the address list.
 	host := params.AddrConnectedTo.Hostname()
 	moveToFront(host, hostPorts)

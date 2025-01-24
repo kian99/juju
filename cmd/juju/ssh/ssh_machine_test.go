@@ -158,7 +158,7 @@ type fakeHostChecker struct {
 
 var _ jujussh.ReachableChecker = (*fakeHostChecker)(nil)
 
-func (f *fakeHostChecker) FindHost(hostPorts network.HostPorts, publicKeys []string) (network.HostPort, error) {
+func (f *fakeHostChecker) FindHost(hostPorts network.HostPorts[network.HostPort], publicKeys []string) (network.HostPort, error) {
 	// TODO(jam): The real reachable checker won't give deterministic ordering
 	// for hostPorts, maybe we should do a random return value?
 	for _, hostPort := range hostPorts {

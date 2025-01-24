@@ -72,7 +72,7 @@ type APIHostPortsSetter struct {
 }
 
 // SetAPIHostPorts is the APIAddressSetter interface.
-func (s APIHostPortsSetter) SetAPIHostPorts(servers []network.HostPorts) error {
+func (s APIHostPortsSetter) SetAPIHostPorts(servers []network.HostPorts[network.HostPort]) error {
 	return s.ChangeConfig(func(c ConfigSetter) error {
 		return c.SetAPIHostPorts(servers)
 	})
@@ -324,7 +324,7 @@ type configSetterOnly interface {
 	SetUpgradedToVersion(newVersion version.Number)
 
 	// SetAPIHostPorts sets the API host/port addresses to connect to.
-	SetAPIHostPorts(servers []network.HostPorts) error
+	SetAPIHostPorts(servers []network.HostPorts[network.HostPort]) error
 
 	// SetCACert sets the CA cert used for validating API connections.
 	SetCACert(string)
@@ -634,7 +634,7 @@ func (c *configInternal) SetUpgradedToVersion(newVersion version.Number) {
 	c.upgradedToVersion = newVersion
 }
 
-func (c *configInternal) SetAPIHostPorts(servers []network.HostPorts) error {
+func (c *configInternal) SetAPIHostPorts(servers []network.HostPorts[network.HostPort]) error {
 	if len(servers) == 0 {
 		return errors.BadRequestf("servers not provided")
 	}
