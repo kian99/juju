@@ -7,7 +7,6 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"fmt"
-	"io"
 	"net"
 	"strconv"
 	"sync/atomic"
@@ -187,31 +186,6 @@ func (s *ServerWorker) directTCPIPHandler(srv *ssh.Server, conn *gossh.ServerCon
 	// Since we only need the raw data to redirect, we can discard them.
 	go gossh.DiscardRequests(reqs)
 
-	jumpServerPipe, terminatingServerPipe := net.Pipe()
-
-	s.tomb.Go(func() error {
-		defer ch.Close()
-		defer jumpServerPipe.Close()
-		defer terminatingServerPipe.Close()
-		_, err := io.Copy(ch, jumpServerPipe)
-		if err != nil {
-			s.config.Logger.Errorf("failed to copy data from jump server to client: %v", err)
-		}
-
-		return nil
-	})
-	s.tomb.Go(func() error {
-		defer ch.Close()
-		defer jumpServerPipe.Close()
-		defer terminatingServerPipe.Close()
-		_, err := io.Copy(jumpServerPipe, ch)
-		if err != nil {
-			s.config.Logger.Errorf("failed to copy data from client to jump server: %v", err)
-		}
-
-		return nil
-	})
-
 	forwardHandler := &ssh.ForwardedTCPHandler{}
 	server := &ssh.Server{
 		PublicKeyHandler: func(ctx ssh.Context, key ssh.PublicKey) bool {
@@ -250,7 +224,7 @@ func (s *ServerWorker) directTCPIPHandler(srv *ssh.Server, conn *gossh.ServerCon
 	}
 
 	server.AddHostKey(signer)
-	server.HandleConn(terminatingServerPipe)
+	server.HandleConn(&chanConn{Channel: ch})
 }
 
 // connCallback returns a connCallback function that limits the number of concurrent connections.
