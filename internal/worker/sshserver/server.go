@@ -141,6 +141,22 @@ func NewServerWorker(config ServerWorkerConfig) (worker.Worker, error) {
 	return s, nil
 }
 
+func (s *ServerWorker) NewJumpServer(options []ServerOption) *ssh.Server {
+	defaultOptions := []ServerOption{
+		WithConnCallback(s.connCallback()),
+		WithPublicKeyAuth(func(ctx ssh.Context, key ssh.PublicKey) bool {
+			return true
+		}),
+		WithPasswordAuth(func(ctx ssh.Context, password string) bool {
+			return true
+		}),
+		WithChannelHandler("direct-tcpip", s.directTCPIPHandler),
+	}
+	allOptions := append(defaultOptions, options...)
+
+	return NewServerBuilder(allOptions...).Build()
+}
+
 // Kill stops the server worker by killing the tomb. Implements worker.Worker.
 func (s *ServerWorker) Kill() {
 	s.tomb.Kill(nil)
