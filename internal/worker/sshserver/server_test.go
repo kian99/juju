@@ -1,7 +1,7 @@
 // Copyright 2025 Canonical Ltd.
 // Licensed under the AGPLv3, see LICENCE file for details.
 
-package sshserver_test
+package sshserver
 
 import (
 	"crypto/rand"
@@ -17,7 +17,6 @@ import (
 	"google.golang.org/grpc/test/bufconn"
 	gc "gopkg.in/check.v1"
 
-	"github.com/juju/juju/internal/worker/sshserver"
 	jujutesting "github.com/juju/juju/testing"
 )
 
@@ -45,11 +44,11 @@ func (s *sshServerSuite) SetUpSuite(c *gc.C) {
 }
 
 func newServerWorkerConfig(
-	l sshserver.Logger,
+	l Logger,
 	j string,
-	modifier func(*sshserver.ServerWorkerConfig),
-) *sshserver.ServerWorkerConfig {
-	cfg := &sshserver.ServerWorkerConfig{
+	modifier func(*ServerWorkerConfig),
+) *ServerWorkerConfig {
+	cfg := &ServerWorkerConfig{
 		Logger:               l,
 		JumpHostKey:          j,
 		NewSSHServerListener: newTestingSSHServerListener,
@@ -61,7 +60,7 @@ func newServerWorkerConfig(
 }
 
 func (s *sshServerSuite) TestValidate(c *gc.C) {
-	cfg := &sshserver.ServerWorkerConfig{}
+	cfg := &ServerWorkerConfig{}
 	l := loggo.GetLogger("test")
 
 	c.Assert(cfg.Validate(), jc.ErrorIs, errors.NotValid)
@@ -70,32 +69,32 @@ func (s *sshServerSuite) TestValidate(c *gc.C) {
 	defer ctrl.Finish()
 
 	// Test no Logger.
-	cfg = newServerWorkerConfig(l, "Logger", func(cfg *sshserver.ServerWorkerConfig) {
+	cfg = newServerWorkerConfig(l, "Logger", func(cfg *ServerWorkerConfig) {
 		cfg.Logger = nil
 	})
 	c.Assert(cfg.Validate(), jc.ErrorIs, errors.NotValid)
 
 	// Test no JumpHostKey.
-	cfg = newServerWorkerConfig(l, "jumpHostKey", func(cfg *sshserver.ServerWorkerConfig) {
+	cfg = newServerWorkerConfig(l, "jumpHostKey", func(cfg *ServerWorkerConfig) {
 		cfg.JumpHostKey = ""
 	})
 	c.Assert(cfg.Validate(), jc.ErrorIs, errors.NotValid)
 
 	// Test no NewSSHServerListener.
-	cfg = newServerWorkerConfig(l, "NewSSHServerListener", func(cfg *sshserver.ServerWorkerConfig) {
+	cfg = newServerWorkerConfig(l, "NewSSHServerListener", func(cfg *ServerWorkerConfig) {
 		cfg.NewSSHServerListener = nil
 	})
 	c.Assert(cfg.Validate(), jc.ErrorIs, errors.NotValid)
 }
 
-func (s *sshServerSuite) TestSSHServer(c *gc.C) {
+func (s *sshServerSuite) TestSSHServerNoAuth(c *gc.C) {
 	ctrl := gomock.NewController(c)
 	defer ctrl.Finish()
 
 	// Firstly, start the server on an in-memory listener
 	listener := bufconn.Listen(8 * 1024)
 
-	server, err := sshserver.NewServerWorker(sshserver.ServerWorkerConfig{
+	server, err := NewServerWorker(ServerWorkerConfig{
 		Logger:                   loggo.GetLogger("test"),
 		Listener:                 listener,
 		MaxConcurrentConnections: maxConcurrentConnections,
@@ -157,7 +156,7 @@ func (s *sshServerSuite) TestSSHServer(c *gc.C) {
 func (s *sshServerSuite) TestSSHServerMaxConnections(c *gc.C) {
 	// Firstly, start the server on an in-memory listener
 	listener := bufconn.Listen(8 * 1024)
-	_, err := sshserver.NewServerWorker(sshserver.ServerWorkerConfig{
+	_, err := NewServerWorker(ServerWorkerConfig{
 		Logger:                   loggo.GetLogger("test"),
 		Listener:                 listener,
 		MaxConcurrentConnections: maxConcurrentConnections,
@@ -212,7 +211,7 @@ func inMemoryDial(c *gc.C, listener *bufconn.Listener, config *ssh.ClientConfig)
 func (s *sshServerSuite) TestSSHWorkerReport(c *gc.C) {
 	// Firstly, start the server on an in-memory listener
 	listener := bufconn.Listen(8 * 1024)
-	worker, err := sshserver.NewServerWorker(sshserver.ServerWorkerConfig{
+	worker, err := NewServerWorker(ServerWorkerConfig{
 		Logger:                   loggo.GetLogger("test"),
 		Listener:                 listener,
 		MaxConcurrentConnections: maxConcurrentConnections,
@@ -221,7 +220,7 @@ func (s *sshServerSuite) TestSSHWorkerReport(c *gc.C) {
 	})
 	c.Assert(err, jc.ErrorIsNil)
 
-	report := worker.(*sshserver.ServerWorker).Report()
+	report := worker.(*ServerWorker).Report()
 	c.Assert(report, gc.DeepEquals, map[string]interface{}{
 		"concurrent_connections": int32(0),
 	})
@@ -231,7 +230,7 @@ func (s *sshServerSuite) TestSSHWorkerReport(c *gc.C) {
 	c.Assert(err, jc.ErrorIsNil)
 	defer conn.Close()
 
-	report = worker.(*sshserver.ServerWorker).Report()
+	report = worker.(*ServerWorker).Report()
 	c.Assert(report, gc.DeepEquals, map[string]interface{}{
 		"concurrent_connections": int32(1),
 	})
