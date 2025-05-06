@@ -5,12 +5,10 @@ package k8s
 
 import (
 	"io"
-	"os"
-	"sync"
 
-	"github.com/creack/pty"
 	"github.com/gliderlabs/ssh"
 	"github.com/juju/errors"
+	"k8s.io/client-go/tools/remotecommand"
 
 	k8sexec "github.com/juju/juju/caas/kubernetes/provider/exec"
 	"github.com/juju/juju/rpc/params"
@@ -38,95 +36,113 @@ func (h *Handlers) SessionHandler(session ssh.Session) {
 		return
 	}
 	containerName, _ := h.destination.Container()
-	ptyReq, winCh, ptyRequested := session.Pty()
+	_, winCh, ptyRequested := session.Pty()
 
 	var stdin io.Reader = session
 	var stdout, stderr io.Writer = session, session.Stderr()
 
-	wg := &sync.WaitGroup{}
-	var tty, ptmx *os.File
+	// wg := &sync.WaitGroup{}
+	// var tty, ptmx *os.File
 
-	if ptyRequested {
-		ptmx, tty, err = pty.Open()
-		// If pty is requested we need to simulate a terminal device, passing
-		// the pty file descriptor to the executor. And pipe it back to the session.
-		if err != nil {
-			handleError(errors.Annotate(err, "failed to open pty"))
-			return
-		}
+	// if ptyRequested {
+	// 	ptmx, tty, err = pty.Open()
+	// 	// If pty is requested we need to simulate a terminal device, passing
+	// 	// the pty file descriptor to the executor. And pipe it back to the session.
+	// 	if err != nil {
+	// 		handleError(errors.Annotate(err, "failed to open pty"))
+	// 		return
+	// 	}
 
-		defer ptmx.Close()
-		defer tty.Close()
+	// 	defer ptmx.Close()
+	// 	defer tty.Close()
 
-		err = pty.Setsize(ptmx, &pty.Winsize{
-			Rows: uint16(ptyReq.Window.Height),
-			Cols: uint16(ptyReq.Window.Width),
-		})
-		if err != nil {
-			handleError(errors.Annotate(err, "failed to set pty size"))
-			return
-		}
+	// 	err = pty.Setsize(ptmx, &pty.Winsize{
+	// 		Rows: uint16(ptyReq.Window.Height),
+	// 		Cols: uint16(ptyReq.Window.Width),
+	// 	})
+	// 	if err != nil {
+	// 		handleError(errors.Annotate(err, "failed to set pty size"))
+	// 		return
+	// 	}
 
-		// Listen for window size changes. When the session is closed,
-		// the channel will be closed as well.
-		go func() {
-			for win := range winCh {
-				_ = pty.Setsize(ptmx, &pty.Winsize{
-					Rows: uint16(win.Height),
-					Cols: uint16(win.Width),
-				})
-			}
-		}()
+	// 	// Listen for window size changes. When the session is closed,
+	// 	// the channel will be closed as well.
+	// 	go func() {
+	// 		for win := range winCh {
+	// 			_ = pty.Setsize(ptmx, &pty.Winsize{
+	// 				Rows: uint16(win.Height),
+	// 				Cols: uint16(win.Width),
+	// 			})
+	// 		}
+	// 	}()
 
-		wg.Add(2)
-		// These goroutines will copy data between the pty and the session.
-		// They can't leak because the session is always closed when this
-		// function returns.
-		go func() {
-			defer wg.Done()
-			// If the user's session ends, close the ptmx because
-			// there is no one listening anymore.
-			defer ptmx.Close()
-			_, _ = io.Copy(ptmx, session)
-		}()
-		go func() {
-			defer wg.Done()
-			// If the ptmx ends, close the session because
-			// there is no more data to send.
-			defer session.Close()
-			_, _ = io.Copy(session, ptmx)
-		}()
+	// 	wg.Add(2)
+	// 	// These goroutines will copy data between the pty and the session.
+	// 	// They can't leak because the session is always closed when this
+	// 	// function returns.
+	// 	go func() {
+	// 		defer wg.Done()
+	// 		// If the user's session ends, close the ptmx because
+	// 		// there is no one listening anymore.
+	// 		defer ptmx.Close()
+	// 		_, _ = io.Copy(ptmx, session)
+	// 	}()
+	// 	go func() {
+	// 		defer wg.Done()
+	// 		// If the ptmx ends, close the session because
+	// 		// there is no more data to send.
+	// 		defer session.Close()
+	// 		_, _ = io.Copy(session, ptmx)
+	// 	}()
 
-		stdin = tty
-		stdout = tty
-		stderr = tty
-	}
+	// 	stdin = tty
+	// 	stdout = tty
+	// 	stderr = tty
+	// }
 
 	err = executor.Exec(
 		k8sexec.ExecParams{
-			PodName:       res.PodName,
-			ContainerName: containerName,
-			Commands:      session.Command(),
-			Stdout:        stdout,
-			Stderr:        stderr,
-			Stdin:         stdin,
-			TTY:           ptyRequested,
-			Env:           session.Environ(),
+			PodName:           res.PodName,
+			ContainerName:     containerName,
+			Commands:          session.Command(),
+			Stdout:            stdout,
+			Stderr:            stderr,
+			Stdin:             stdin,
+			TTY:               ptyRequested,
+			TerminalSizeQueue: &sizeQueue{winCh},
+			Env:               session.Environ(),
 		},
 		session.Context().Done(),
 	)
-	if tty != nil {
-		tty.Close()
-		// Send a new line to the session to end the master
-		// side of the pty.
-		_, _ = ptmx.WriteString("\n")
-	}
+	// if tty != nil {
+	// 	tty.Close()
+	// 	// Send a new line to the session to end the master
+	// 	// side of the pty.
+	// 	_, _ = ptmx.WriteString("\n")
+	// }
 	if err != nil {
 		handleError(errors.Annotate(err, "failed to execute command in k8s pod"))
 		return
 	}
-	if ptyRequested {
-		// Wait for the goroutines to finish copying data.
-		wg.Wait()
+	// if ptyRequested {
+	// 	// Wait for the goroutines to finish copying data.
+	// 	wg.Wait()
+	// }
+}
+
+type sizeQueue struct {
+	windowSize <-chan ssh.Window
+}
+
+func (s *sizeQueue) Next() *remotecommand.TerminalSize {
+	for {
+		size, ok := <-s.windowSize
+		if !ok {
+			return nil
+		}
+		return &remotecommand.TerminalSize{
+			Width:  uint16(size.Width),
+			Height: uint16(size.Height),
+		}
 	}
 }

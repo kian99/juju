@@ -18,7 +18,6 @@ import (
 	"github.com/juju/loggo"
 	"github.com/juju/utils/v3"
 	"github.com/kballard/go-shellquote"
-	"golang.org/x/crypto/ssh/terminal"
 	core "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -136,10 +135,11 @@ type ExecParams struct {
 	ContainerName string
 	WorkingDir    string
 
-	Stdin  io.Reader
-	Stdout io.Writer
-	Stderr io.Writer
-	TTY    bool
+	Stdin             io.Reader
+	Stdout            io.Writer
+	Stderr            io.Writer
+	TTY               bool
+	TerminalSizeQueue remotecommand.TerminalSizeQueue
 
 	Signal <-chan syscall.Signal
 }
@@ -191,26 +191,27 @@ func processEnv(env []string) (string, error) {
 
 func (c client) safeRun(opts ExecParams, executor remotecommand.Executor) (err error) {
 	streamOptions := remotecommand.StreamOptions{
-		Stdin:  opts.Stdin,
-		Stdout: opts.Stdout,
-		Stderr: opts.Stderr,
-		Tty:    opts.TTY,
+		Stdin:             opts.Stdin,
+		Stdout:            opts.Stdout,
+		Stderr:            opts.Stderr,
+		Tty:               opts.TTY,
+		TerminalSizeQueue: opts.TerminalSizeQueue,
 	}
 
-	if opts.TTY {
-		inFd := getFdInfo(opts.Stdin)
-		oldState, err := terminal.MakeRaw(inFd)
-		if err != nil {
-			return errors.Trace(err)
-		}
-		defer func() { err = terminal.Restore(inFd, oldState) }()
+	// if opts.TTY {
+	// 	inFd := getFdInfo(opts.Stdin)
+	// 	oldState, err := terminal.MakeRaw(inFd)
+	// 	if err != nil {
+	// 		return errors.Trace(err)
+	// 	}
+	// 	defer func() { err = terminal.Restore(inFd, oldState) }()
 
-		if sizeQ := newSizeQueue(); sizeQ != nil {
-			sizeQ.watch(getFdInfo(opts.Stdout))
-			defer sizeQ.stop()
-			streamOptions.TerminalSizeQueue = sizeQ
-		}
-	}
+	// 	if sizeQ := newSizeQueue(); sizeQ != nil {
+	// 		sizeQ.watch(getFdInfo(opts.Stdout))
+	// 		defer sizeQ.stop()
+	// 		streamOptions.TerminalSizeQueue = sizeQ
+	// 	}
+	// }
 	return executor.Stream(streamOptions)
 }
 
