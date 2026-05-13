@@ -69,6 +69,9 @@ func (c *unexposeCommand) Info() *cmd.Info {
 		Purpose:  usageUnexposeSummary,
 		Doc:      usageUnexposeDetails,
 		Examples: unexposeCommandExample,
+		Autocomplete: &cmd.Autocomplete{Positionals: []cmd.AutocompleteArg{
+			{Resources: []cmd.AutocompleteResource{{Kind: cmd.AutocompleteApplications}}},
+		}},
 		SeeAlso: []string{
 			"expose",
 		},

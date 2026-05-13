@@ -45,6 +45,9 @@ func (c *showMachineCommand) Info() *cmd.Info {
 		Purpose:  "Show a machine's status.",
 		Doc:      showMachineCommandDoc,
 		Examples: showMachineExamples,
+		Autocomplete: &cmd.Autocomplete{Positionals: []cmd.AutocompleteArg{
+			{Resources: []cmd.AutocompleteResource{{Kind: cmd.AutocompleteMachines}}, Repeat: true},
+		}},
 		SeeAlso: []string{
 			"add-machine",
 		},

@@ -16,11 +16,12 @@ type Snapshot struct {
 
 // Command describes a single Juju command and its flags.
 type Command struct {
-	Name    string   `json:"name"`
-	Aliases []string `json:"aliases,omitempty"`
-	Args    string   `json:"args,omitempty"`
-	Purpose string   `json:"purpose,omitempty"`
-	Flags   []Flag   `json:"flags,omitempty"`
+	Name         string            `json:"name"`
+	Aliases      []string          `json:"aliases,omitempty"`
+	Args         string            `json:"args,omitempty"`
+	Purpose      string            `json:"purpose,omitempty"`
+	Flags        []Flag            `json:"flags,omitempty"`
+	Autocomplete *cmd.Autocomplete `json:"autocomplete,omitempty"`
 }
 
 // Flag describes a command-line flag that can be completed.
@@ -118,12 +119,36 @@ func (r *registry) RegisterDeprecated(command cmd.Command, check cmd.Deprecation
 func describeCommand(command cmd.Command) Command {
 	info := command.Info()
 	return Command{
-		Name:    info.Name,
-		Aliases: append([]string(nil), info.Aliases...),
-		Args:    info.Args,
-		Purpose: info.Purpose,
-		Flags:   describeFlags(command, info.Name),
+		Name:         info.Name,
+		Aliases:      append([]string(nil), info.Aliases...),
+		Args:         info.Args,
+		Purpose:      info.Purpose,
+		Flags:        describeFlags(command, info.Name),
+		Autocomplete: cloneAutocomplete(info.Autocomplete),
 	}
+}
+
+func cloneAutocomplete(ac *cmd.Autocomplete) *cmd.Autocomplete {
+	if ac == nil {
+		return nil
+	}
+	clone := &cmd.Autocomplete{
+		Positionals: make([]cmd.AutocompleteArg, len(ac.Positionals)),
+		Flags:       make([]cmd.AutocompleteFlag, len(ac.Flags)),
+	}
+	for i, positional := range ac.Positionals {
+		clone.Positionals[i] = cmd.AutocompleteArg{
+			Resources: append([]cmd.AutocompleteResource(nil), positional.Resources...),
+			Repeat:    positional.Repeat,
+		}
+	}
+	for i, flag := range ac.Flags {
+		clone.Flags[i] = cmd.AutocompleteFlag{
+			Names:     append([]string(nil), flag.Names...),
+			Resources: append([]cmd.AutocompleteResource(nil), flag.Resources...),
+		}
+	}
+	return clone
 }
 
 func describeFlags(command cmd.Command, name string) []Flag {

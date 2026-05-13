@@ -4,6 +4,7 @@ import (
 	"os"
 	"testing"
 
+	basecmd "github.com/juju/juju/cmd/cmd"
 	jujucmd "github.com/juju/juju/cmd/cmd"
 	"github.com/juju/juju/cmd/juju/commands"
 	"github.com/juju/juju/cmd/juju/completion"
@@ -58,6 +59,30 @@ func TestFlagsForResolvesAliases(t *testing.T) {
 	flags := snapshot.FlagsFor("list-actions")
 	if !contains(flags, "--schema") {
 		t.Fatalf("expected flag %q for alias-backed lookup", "--schema")
+	}
+}
+
+func TestDescribeIncludesAutocompleteMetadata(t *testing.T) {
+	snapshot := describeSnapshot()
+	config, found := findCommand(snapshot, "config")
+	if !found {
+		t.Fatalf("config command not found")
+	}
+	if config.Autocomplete == nil {
+		t.Fatalf("config command autocomplete metadata is empty")
+	}
+	if len(config.Autocomplete.Positionals) != 2 {
+		t.Fatalf("unexpected positional metadata: %#v", config.Autocomplete.Positionals)
+	}
+	if config.Autocomplete.Positionals[0].Resources[0].Kind != basecmd.AutocompleteApplications {
+		t.Fatalf("unexpected first positional resource: %#v", config.Autocomplete.Positionals[0].Resources)
+	}
+	second := config.Autocomplete.Positionals[1]
+	if len(second.Resources) != 1 || second.Resources[0].Kind != basecmd.AutocompleteApplicationConfig {
+		t.Fatalf("unexpected second positional resource: %#v", second.Resources)
+	}
+	if second.Resources[0].FromPositional == nil || *second.Resources[0].FromPositional != 0 {
+		t.Fatalf("unexpected positional dependency: %#v", second.Resources[0].FromPositional)
 	}
 }
 

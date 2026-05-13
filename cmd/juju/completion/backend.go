@@ -9,6 +9,7 @@ import (
 
 	"github.com/juju/errors"
 
+	applicationclient "github.com/juju/juju/api/client/application"
 	apiclient "github.com/juju/juju/api/client/client"
 	"github.com/juju/juju/api/connector"
 	"github.com/juju/juju/api/jujuclient"
@@ -19,20 +20,23 @@ import (
 
 type currentModelFunc func(jujuclient.ClientStore) (string, error)
 type statusFetcherFunc func(jujuclient.ClientStore, string) (*params.FullStatus, error)
+type applicationConfigFetcherFunc func(jujuclient.ClientStore, string, string) (*params.ApplicationGetResults, error)
 
 // Backend serves shell completion candidates backed by Juju client state.
 type Backend struct {
-	Store         jujuclient.ClientStore
-	currentModel  currentModelFunc
-	statusFetcher statusFetcherFunc
+	Store                    jujuclient.ClientStore
+	currentModel             currentModelFunc
+	statusFetcher            statusFetcherFunc
+	applicationConfigFetcher applicationConfigFetcherFunc
 }
 
 // NewBackend returns a completion backend using the local Juju client store.
 func NewBackend() *Backend {
 	return &Backend{
-		Store:         jujuclient.NewFileClientStore(),
-		currentModel:  determineCurrentModel,
-		statusFetcher: fetchStatus,
+		Store:                    jujuclient.NewFileClientStore(),
+		currentModel:             determineCurrentModel,
+		statusFetcher:            fetchStatus,
+		applicationConfigFetcher: fetchApplicationConfig,
 	}
 }
 
@@ -111,6 +115,22 @@ func (b *Backend) Machines(model string) ([]string, error) {
 	return mapKeys(status.Machines), nil
 }
 
+// ApplicationConfigKeys returns config keys for the supplied application.
+func (b *Backend) ApplicationConfigKeys(model, application string) ([]string, error) {
+	if application == "" {
+		return nil, nil
+	}
+	modelIdentifier, err := b.resolveModel(model)
+	if err != nil {
+		return nil, err
+	}
+	result, err := b.applicationConfigFetcher(b.Store, modelIdentifier, application)
+	if err != nil {
+		return nil, err
+	}
+	return mergeCandidates(mapKeys(result.CharmConfig), mapKeys(result.ApplicationConfig)), nil
+}
+
 func (b *Backend) status(model string) (*params.FullStatus, error) {
 	modelIdentifier, err := b.resolveModel(model)
 	if err != nil {
@@ -145,8 +165,7 @@ func determineCurrentModel(store jujuclient.ClientStore) (string, error) {
 }
 
 // fetchStatus opens a direct API connection to the resolved model and calls
-// the Client.Status facade. Dial timeout is 3 s; on any error the empty
-// status is returned so completion never blocks the shell.
+// the Client.Status facade.
 func fetchStatus(store jujuclient.ClientStore, modelIdentifier string) (*params.FullStatus, error) {
 	controllerName, modelUUID, err := resolveModelUUID(store, modelIdentifier)
 	if err != nil {
@@ -173,6 +192,35 @@ func fetchStatus(store jujuclient.ClientStore, modelIdentifier string) (*params.
 
 	logger := internallogger.GetLogger("juju.completion")
 	return apiclient.NewClient(apiConn, logger).Status(dialCtx, nil)
+}
+
+// fetchApplicationConfig opens a direct API connection to the resolved model
+// and fetches config metadata for the named application.
+func fetchApplicationConfig(store jujuclient.ClientStore, modelIdentifier, applicationName string) (*params.ApplicationGetResults, error) {
+	controllerName, modelUUID, err := resolveModelUUID(store, modelIdentifier)
+	if err != nil {
+		return nil, err
+	}
+
+	conn, err := connector.NewClientStore(connector.ClientStoreConfig{
+		ControllerName: controllerName,
+		ModelUUID:      modelUUID,
+		ClientStore:    store,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	dialCtx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	apiConn, err := conn.Connect(dialCtx)
+	if err != nil {
+		return nil, err
+	}
+	defer apiConn.Close()
+
+	return applicationclient.NewClient(apiConn).Get(dialCtx, applicationName)
 }
 
 // resolveModelUUID parses a "controller:model" or bare "model" identifier and

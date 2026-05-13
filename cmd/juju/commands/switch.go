@@ -83,6 +83,9 @@ func (c *switchCommand) Info() *cmd.Info {
 		Purpose:  usageSummary,
 		Doc:      usageDetails,
 		Examples: usageExamples,
+		Autocomplete: &cmd.Autocomplete{Positionals: []cmd.AutocompleteArg{
+			{Resources: []cmd.AutocompleteResource{{Kind: cmd.AutocompleteControllers}, {Kind: cmd.AutocompleteModels}}},
+		}},
 		SeeAlso: []string{
 			"controllers",
 			"models",

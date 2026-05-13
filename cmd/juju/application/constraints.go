@@ -103,6 +103,9 @@ func (c *applicationGetConstraintsCommand) Info() *cmd.Info {
 		Purpose:  usageGetConstraintsSummary,
 		Doc:      usageGetConstraintsDetails,
 		Examples: usageGetConstraintsExamples,
+		Autocomplete: &cmd.Autocomplete{Positionals: []cmd.AutocompleteArg{
+			{Resources: []cmd.AutocompleteResource{{Kind: cmd.AutocompleteApplications}}},
+		}},
 		SeeAlso: []string{
 			"set-constraints",
 			"model-constraints",
@@ -168,6 +171,9 @@ func (c *applicationSetConstraintsCommand) Info() *cmd.Info {
 		Purpose:  usageSetConstraintsSummary,
 		Doc:      usageSetConstraintsDetails,
 		Examples: usageSetConstraintsExamples,
+		Autocomplete: &cmd.Autocomplete{Positionals: []cmd.AutocompleteArg{
+			{Resources: []cmd.AutocompleteResource{{Kind: cmd.AutocompleteApplications}}},
+		}},
 		SeeAlso: []string{
 			"constraints",
 			"model-constraints",

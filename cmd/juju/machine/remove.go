@@ -80,6 +80,9 @@ func (c *removeCommand) Info() *cmd.Info {
 		Purpose:  "Removes one or more machines from a model.",
 		Doc:      destroyMachineDoc,
 		Examples: destroyMachineExamples,
+		Autocomplete: &cmd.Autocomplete{Positionals: []cmd.AutocompleteArg{
+			{Resources: []cmd.AutocompleteResource{{Kind: cmd.AutocompleteMachines}}, Repeat: true},
+		}},
 		SeeAlso: []string{
 			"add-machine",
 		},

@@ -90,6 +90,9 @@ func (c *debugHooksCommand) Info() *cmd.Info {
 		Doc:      debugHooksDoc,
 		Examples: usageDebugHooksExamples,
 		Aliases:  []string{"debug-hook"},
+		Autocomplete: &cmd.Autocomplete{Positionals: []cmd.AutocompleteArg{
+			{Resources: []cmd.AutocompleteResource{{Kind: cmd.AutocompleteUnits}}},
+		}},
 		SeeAlso: []string{
 			"ssh",
 			"debug-code",

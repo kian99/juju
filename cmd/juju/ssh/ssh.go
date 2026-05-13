@@ -202,6 +202,9 @@ func (c *sshCommand) Info() *cmd.Info {
 		Purpose:  usageSSHSummary,
 		Doc:      usageSSHDetails,
 		Examples: usageSSHExamples,
+		Autocomplete: &cmd.Autocomplete{Positionals: []cmd.AutocompleteArg{
+			{Resources: []cmd.AutocompleteResource{{Kind: cmd.AutocompleteUnits}, {Kind: cmd.AutocompleteMachines}}},
+		}},
 		SeeAlso: []string{
 			"scp",
 		},

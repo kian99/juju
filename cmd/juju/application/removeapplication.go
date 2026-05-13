@@ -94,6 +94,9 @@ func (c *removeApplicationCommand) Info() *cmd.Info {
 		Purpose:  helpSummaryRmApp,
 		Doc:      helpDetailsRmApp,
 		Examples: helpExamplesRmApp,
+		Autocomplete: &cmd.Autocomplete{Positionals: []cmd.AutocompleteArg{
+			{Resources: []cmd.AutocompleteResource{{Kind: cmd.AutocompleteApplications}}, Repeat: true},
+		}},
 		SeeAlso: []string{
 			"scale-application",
 			"show-application",

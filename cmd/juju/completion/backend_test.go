@@ -128,6 +128,32 @@ func TestApplicationsPassExplicitModelThrough(t *testing.T) {
 	assertEqualStrings(t, applications, []string{"api"})
 }
 
+func TestApplicationConfigKeysPassApplicationAndModelThrough(t *testing.T) {
+	backend := &Backend{
+		Store:         jujuclient.NewMemStore(),
+		currentModel:  unreachableCurrentModel,
+		statusFetcher: unreachableStatusFetcher,
+		applicationConfigFetcher: func(_ jujuclient.ClientStore, modelIdentifier, application string) (*params.ApplicationGetResults, error) {
+			if modelIdentifier != "test-36:admin/example" {
+				t.Fatalf("unexpected explicit model identifier: %s", modelIdentifier)
+			}
+			if application != "api" {
+				t.Fatalf("unexpected application: %s", application)
+			}
+			return &params.ApplicationGetResults{
+				CharmConfig:       map[string]any{"port": map[string]any{}},
+				ApplicationConfig: map[string]any{"trust": map[string]any{}},
+			}, nil
+		},
+	}
+
+	keys, err := backend.ApplicationConfigKeys("test-36:admin/example", "api")
+	if err != nil {
+		t.Fatalf("listing application config keys: %v", err)
+	}
+	assertEqualStrings(t, keys, []string{"port", "trust"})
+}
+
 func assertEqualStrings(t *testing.T, got, want []string) {
 	t.Helper()
 	if len(got) != len(want) {
@@ -144,6 +170,6 @@ func unreachableCurrentModel(_ jujuclient.ClientStore) (string, error) {
 	panic("current model should not be called")
 }
 
-func unreachableStatusFetcher(_ jujuclient.ClientStore, _ string) (*params.FullStatus, error) {
+func unreachableStatusFetcher(jujuclient.ClientStore, string) (*params.FullStatus, error) {
 	panic("status fetcher should not be called")
 }

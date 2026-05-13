@@ -133,6 +133,9 @@ func (c *statusCommand) Info() *cmd.Info {
 		Purpose:  usageSummary,
 		Doc:      usageDetails,
 		Examples: usageExamples,
+		Autocomplete: &cmd.Autocomplete{Positionals: []cmd.AutocompleteArg{
+			{Resources: []cmd.AutocompleteResource{{Kind: cmd.AutocompleteApplications}, {Kind: cmd.AutocompleteUnits}}, Repeat: true},
+		}},
 		SeeAlso: []string{
 			"machines",
 			"show-model",

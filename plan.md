@@ -2,8 +2,8 @@
 
 Completion is embedded in the `juju` binary as `juju autocomplete`. Shell
 wrappers call it and feed the output to the shell's completion machinery.
-Dynamic entities (applications, units, machines) are resolved via a direct
-API connection — no subprocess calls to `juju`.
+Dynamic entities are resolved from the local client store and direct Juju API
+connections.
 
 ## Architecture
 
@@ -12,20 +12,22 @@ shell tab-press
   └─ etc/bash_completion.d/juju  (or etc/zsh/completions/_juju)
        └─ juju autocomplete --cword N --current W --word W ...
             ├─ completion.Describe(registerCommands)   → static snapshot
+            │    └─ cmd.Info.Autocomplete              → command-owned rules
             └─ completion.Backend.Complete(snapshot, req)
                  ├─ offline: controllers, models       → local client store
                  └─ online:  applications, units,      → api/connector +
-                             machines                    api/client/client
+                             machines, config keys        api/client/*
 ```
 
 ## Key files
 
 | File | Role |
 |---|---|
+| `cmd/cmd/cmd.go` | Shared command metadata, including `Info.Autocomplete` |
 | `cmd/juju/commands/autocomplete.go` | `juju autocomplete` subcommand |
-| `cmd/juju/completion/metadata.go` | Builds static snapshot of all commands and flags |
+| `cmd/juju/completion/metadata.go` | Builds static snapshot of commands, flags, and autocomplete rules |
 | `cmd/juju/completion/complete.go` | Routes a shell request to candidate sets |
-| `cmd/juju/completion/backend.go` | Provides controllers/models/apps/units/machines |
+| `cmd/juju/completion/backend.go` | Provides controllers/models/apps/units/machines/config keys |
 | `cmd/juju-completion/main.go` | Standalone binary (retained, shares the same library) |
 | `etc/bash_completion.d/juju` | Bash wrapper — `source` to activate |
 | `etc/zsh/completions/_juju` | Zsh wrapper — `source` or add dir to `fpath` |
@@ -35,7 +37,9 @@ shell tab-press
 `completion.Describe(func(Registry))` accepts an injected registrar to avoid
 an import cycle between `completion` and `commands`. Both `autocomplete.go`
 and `juju-completion/main.go` pass `commands.RegisterCommands` through a small
-local adapter struct.
+local adapter struct. The snapshot now carries `cmd.Info.Autocomplete`, so the
+completion engine can derive positional and flag-value resources from command
+metadata instead of a hardcoded routing table.
 
 ## Dynamic backend
 
@@ -48,10 +52,11 @@ local adapter struct.
   `store.CurrentModel(controller)`; no subprocess
 
 **Online (≤3 s dial timeout)** — opens a direct API connection:
-- `Applications`, `Units`, `Machines` — `resolveModelUUID` looks up the UUID
-  in `store.AllModels`, opens `connector.NewClientStore(ClientStoreConfig{…})`,
-  calls `apiclient.NewClient(conn, logger).Status(ctx, nil)`, closes the
-  connection; on any error returns empty so completion never blocks
+- `Applications`, `Units`, `Machines` — resolve the model UUID from the local
+  store, open `connector.NewClientStore(...)`, then call
+  `api/client/client.NewClient(...).Status(...)`
+- `ApplicationConfigKeys` — reuse the same model connection pattern and call
+  `api/client/application.NewClient(...).Get(...)`
 
 ## Shell activation
 
@@ -83,8 +88,8 @@ thin shell wrapper.
 
 The shell layer now only forwards Bash completion state to the backend. The backend builds static
 command and flag metadata directly from Juju's registered commands at runtime, and resolves dynamic
-controller, model, application, unit, and machine completions from local client state and `juju`
-command output.
+controller, model, application, unit, machine, and config-key completions from local client state
+and direct Juju API calls.
 
 This replaced the previous large bash/Python completion script and superseded the earlier
 `juju-complete` prototype package.
@@ -95,8 +100,10 @@ This replaced the previous large bash/Python completion script and superseded th
 - **Shell**: keep Bash as a thin adapter only; move Juju-specific logic into Go
 - **Static metadata**: generate command and flag metadata at runtime from `commands.RegisterCommands`
   rather than from a committed JSON artifact
-- **Dynamic metadata**: use the Juju client store for controllers and models, and use `juju switch`
-  plus `juju status --format json` for model-scoped entities
+- **Autocomplete rules**: define per-command completion resources in `cmd.Info.Autocomplete`
+  so positional completion is owned by the command, not by `complete.go`
+- **Dynamic metadata**: use the Juju client store for controllers and models, and use
+  direct API connections for model-scoped entities
 - **Tests**: add focused Go tests for metadata extraction, backend providers, and completion routing
 - **Documentation**: add installation and developer testing documentation for the new flow
 - **Scope**: Bash is implemented; zsh, fish, REPL completion, snap packaging changes, and caching
@@ -145,18 +152,17 @@ Current providers:
 
 - **Controllers**: from `jujuclient.NewFileClientStore().AllControllers()`
 - **Models**: from `AllModels(controller)`, returning `controller:model` entries for every
-  controller and bare model names for the current controller
+  controller
 - **Current model resolution**:
   - use `JUJU_MODEL` when present
-  - otherwise run `juju switch`
+  - otherwise read `CurrentController()` + `CurrentModel()` from the client store
 - **Applications / units / machines**:
-  - resolve the target model
-  - run `juju status --model <model> --format json`
-  - parse `params.FullStatus`
-  - extract entities from the returned status document
-
-This deliberately avoids the older direct API connection approach and the original local YAML / API
-cache split proposed in the first draft of the plan.
+  - resolve the target model UUID from `store.AllModels`
+  - open a model-scoped API connection with `connector.NewClientStore`
+  - call `api/client/client.Client.Status`
+- **Application config keys**:
+  - reuse the model-scoped API connection
+  - call `api/client/application.Client.Get`
 
 ### 4. Shell completion routing in Go
 
@@ -166,23 +172,22 @@ The current behavior is:
 
 - first command position completes Juju commands and aliases
 - `juju help ...` completes commands
-- current token starting with `-` completes flags for the selected command
-- `--controller` / `-c` completes controllers
-- `--model` / `-m` completes models
-- `--application` completes applications
-- `--unit` completes units
-- `--machine` completes machines
-- selected positional commands complete dynamic entities in a small explicit routing table
+- current token that looks like a flag completes flags for the selected command
+- standard resource flags (`--controller`, `--model`, `--application`, `--unit`, `--machine`) resolve dynamically
+- positional completion is driven by `cmd.Info.Autocomplete`
+- positional parsing skips known flag values so completion works when flags are interleaved with args
+- dependent resources can reference earlier positionals, e.g. `juju config <app> <key>`
 
-Implemented positional routing includes:
+Implemented command-owned routing currently includes:
 
 - `switch` → controllers and models
-- `config`, `refresh`, `expose`, `unexpose`, `remove-application`, `application-storage`,
-  `constraints`, `set-constraints`, `set-application-base` → applications
+- `config` → applications, then application config keys
+- `refresh`, `expose`, `unexpose`, `remove-application`, `constraints`, `set-constraints` → applications
 - `status` → applications and units
-- `ssh`, `scp`, `debug-hooks`, `debug-code` → units and machines
-- `resolved`, `remove-unit` → units
-- `show-machine`, `remove-machine`, `upgrade-machine` → machines
+- `ssh`, `scp` → units and machines
+- `debug-hooks`, `debug-code`, `resolved` → units
+- `remove-unit` → units and applications
+- `show-machine`, `remove-machine` → machines
 
 ### 5. Thin Bash wrapper
 
@@ -227,8 +232,9 @@ The final implementation differs from the original plan in a few important ways.
 
 - `juju-completion` was used as the final binary name instead of `juju-complete`
 - runtime metadata extraction replaced the planned generated static JSON file
-- direct shelling to `juju switch` and `juju status --format json` replaced the planned local YAML
-  parser plus API cache split
+- command-owned autocomplete metadata replaced the hardcoded positional routing table
+- direct API connections were kept for model-scoped entities instead of shelling
+  out through the CLI
 - focused Go tests were added instead of keeping the implementation test-free
 - Bash support and documentation landed; zsh support and broader packaging work did not
 
@@ -248,11 +254,11 @@ The final implementation differs from the original plan in a few important ways.
 ## Current limitations
 
 - The current thin wrapper only targets Bash.
-- Live completion for applications, units, and machines depends on `juju status` succeeding
-  non-interactively for the selected model.
+- Live completion for applications, units, machines, and config keys depends on
+  the controller API being reachable for the selected model.
 - There is no cache layer yet for status-backed completion.
-- Completion routing is intentionally explicit and currently covers the command set implemented in
-  `complete.go`; it is not yet a generic positional completion framework.
+- The metadata model is sequence-based. Commands with flag-conditioned or shape-conditioned
+  argument semantics may need richer rule conditions than `Positionals` plus resource dependencies.
 
 ---
 
@@ -260,8 +266,8 @@ The final implementation differs from the original plan in a few important ways.
 
 - `cmd/juju-completion/main.go` — backend entrypoint and shell-facing `complete` command
 - `cmd/juju/completion/metadata.go` — runtime command and flag snapshot generation
-- `cmd/juju/completion/backend.go` — controller, model, application, unit, and machine providers
-- `cmd/juju/completion/complete.go` — routing from shell context to candidate sets
+- `cmd/juju/completion/backend.go` — controller, model, application, unit, machine, and config-key providers via client store and API connections
+- `cmd/juju/completion/complete.go` — metadata-driven routing from shell context to candidate sets
 - `cmd/juju/commands/main.go` — exported command registration hook for completion metadata
 - `etc/bash_completion.d/juju` — thin Bash wrapper
 - `docs/howto/manage-bash-auto-completion.md` — install and developer testing instructions
@@ -278,15 +284,15 @@ Focused validation for the implemented approach is:
 5. shell simulation of flag completion:
    - `juju deploy --c`
 
-Live model-backed completion was only partially validated because the environment can still prompt
-for interactive Juju credentials when `juju status` is invoked.
+Live model-backed completion was only partially validated because the environment can still require
+interactive Juju credentials when opening a model-scoped API connection.
 
 ## Follow-up work
 
 If this work continues, the next logical slices are:
 
 1. add zsh support with the same backend protocol
-2. decide whether model-backed completion needs caching to avoid repeated `juju status` calls
+2. decide whether model-backed completion needs caching to avoid repeated API calls
 3. expand positional completion coverage command by command
 4. wire the backend and wrapper into packaging and snap installation flows
 5. benchmark the backend path against the removed legacy shell script

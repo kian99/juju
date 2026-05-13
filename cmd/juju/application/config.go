@@ -162,6 +162,10 @@ func (c *configCommand) Info() *cmd.Info {
 		Purpose:  configSummary,
 		Doc:      configDetails,
 		Examples: examples,
+		Autocomplete: &cmd.Autocomplete{Positionals: []cmd.AutocompleteArg{
+			{Resources: []cmd.AutocompleteResource{{Kind: cmd.AutocompleteApplications}}},
+			{Resources: []cmd.AutocompleteResource{{Kind: cmd.AutocompleteApplicationConfig, FromPositional: cmd.AutocompleteReference(0)}}, Repeat: true},
+		}},
 		SeeAlso: []string{
 			"deploy",
 			"status",

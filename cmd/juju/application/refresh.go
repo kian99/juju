@@ -283,10 +283,13 @@ all those units to disappear before continuing.
 
 func (c *refreshCommand) Info() *cmd.Info {
 	return jujucmd.Info(&cmd.Info{
-		Name:     "refresh",
-		Args:     "<application>",
-		Purpose:  "Refresh an application's charm.",
-		Doc:      refreshDoc,
+		Name:    "refresh",
+		Args:    "<application>",
+		Purpose: "Refresh an application's charm.",
+		Doc:     refreshDoc,
+		Autocomplete: &cmd.Autocomplete{Positionals: []cmd.AutocompleteArg{
+			{Resources: []cmd.AutocompleteResource{{Kind: cmd.AutocompleteApplications}}},
+		}},
 		SeeAlso:  []string{"deploy"},
 		Examples: refreshExamples,
 	})

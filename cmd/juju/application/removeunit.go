@@ -110,6 +110,9 @@ func (c *removeUnitCommand) Info() *cmd.Info {
 		Purpose:  "Remove application units from the model.",
 		Doc:      removeUnitDoc,
 		Examples: removeUnitExamples,
+		Autocomplete: &cmd.Autocomplete{Positionals: []cmd.AutocompleteArg{
+			{Resources: []cmd.AutocompleteResource{{Kind: cmd.AutocompleteUnits}, {Kind: cmd.AutocompleteApplications}}, Repeat: true},
+		}},
 		SeeAlso: []string{
 			"remove-application",
 			"scale-application",
