@@ -288,6 +288,51 @@ type Info struct {
 	// ShowSuperFlags contains the names of the 'super' command flags
 	// that are desired to be shown in the sub-command help output.
 	ShowSuperFlags []string
+
+	// Autocomplete describes command-specific completion behaviour.
+	Autocomplete *Autocomplete
+}
+
+// Autocomplete describes completion sources for command arguments and flags.
+type Autocomplete struct {
+	Positionals []AutocompleteArg  `json:"positionals,omitempty"`
+	Flags       []AutocompleteFlag `json:"flags,omitempty"`
+}
+
+// AutocompleteArg describes completion sources for a positional argument.
+type AutocompleteArg struct {
+	Resources []AutocompleteResource `json:"resources,omitempty"`
+	Repeat    bool                   `json:"repeat,omitempty"`
+}
+
+// AutocompleteFlag describes completion sources for a flag value.
+type AutocompleteFlag struct {
+	Names     []string               `json:"names,omitempty"`
+	Resources []AutocompleteResource `json:"resources,omitempty"`
+}
+
+// AutocompleteResource describes one candidate source for completion.
+type AutocompleteResource struct {
+	Kind           AutocompleteResourceKind `json:"kind"`
+	FromPositional *int                     `json:"fromPositional,omitempty"`
+}
+
+// AutocompleteResourceKind identifies a completion candidate source.
+type AutocompleteResourceKind string
+
+const (
+	AutocompleteControllers       AutocompleteResourceKind = "controllers"
+	AutocompleteModels            AutocompleteResourceKind = "models"
+	AutocompleteApplications      AutocompleteResourceKind = "applications"
+	AutocompleteUnits             AutocompleteResourceKind = "units"
+	AutocompleteMachines          AutocompleteResourceKind = "machines"
+	AutocompleteApplicationConfig AutocompleteResourceKind = "application-config-keys"
+)
+
+// AutocompleteReference returns a positional argument reference for
+// autocomplete resource dependencies.
+func AutocompleteReference(index int) *int {
+	return &index
 }
 
 // Help renders i's content, along with documentation for any

@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/juju/juju/api/jujuclient"
+	basecmd "github.com/juju/juju/cmd/cmd"
 	"github.com/juju/juju/rpc/params"
 )
 
@@ -74,6 +75,59 @@ func TestCompleteApplicationsFromCommandPosition(t *testing.T) {
 	assertEqualStrings(t, candidates, []string{"backend"})
 }
 
+func TestCompleteApplicationConfigKeysFromSecondPositional(t *testing.T) {
+	backend := &Backend{
+		Store:         jujuclient.NewMemStore(),
+		currentModel:  func(_ jujuclient.ClientStore) (string, error) { return "test-36:admin/example", nil },
+		statusFetcher: unreachableStatusFetcher,
+		applicationConfigFetcher: func(_ jujuclient.ClientStore, modelIdentifier, application string) (*params.ApplicationGetResults, error) {
+			if modelIdentifier != "test-36:admin/example" {
+				t.Fatalf("unexpected model identifier: %s", modelIdentifier)
+			}
+			if application != "api" {
+				t.Fatalf("unexpected application: %s", application)
+			}
+			return &params.ApplicationGetResults{CharmConfig: map[string]any{"port": map[string]any{}, "timeout": map[string]any{}}}, nil
+		},
+	}
+
+	candidates, err := backend.Complete(testSnapshot(), Request{
+		Words:   []string{"juju", "config", "api", "po"},
+		Cword:   3,
+		Current: "po",
+	})
+	if err != nil {
+		t.Fatalf("completing config keys: %v", err)
+	}
+	assertEqualStrings(t, candidates, []string{"port"})
+}
+
+func TestCompleteApplicationsIgnoresFlagValuesWhenFindingPosition(t *testing.T) {
+	backend := &Backend{
+		Store:        jujuclient.NewMemStore(),
+		currentModel: unreachableCurrentModel,
+		statusFetcher: func(_ jujuclient.ClientStore, modelIdentifier string) (*params.FullStatus, error) {
+			if modelIdentifier != "test-36:admin/example" {
+				t.Fatalf("unexpected model identifier: %s", modelIdentifier)
+			}
+			return &params.FullStatus{Applications: map[string]params.ApplicationStatus{
+				"api":     {},
+				"backend": {},
+			}}, nil
+		},
+	}
+
+	candidates, err := backend.Complete(testSnapshot(), Request{
+		Words:   []string{"juju", "config", "--model", "test-36:admin/example", "b"},
+		Cword:   4,
+		Current: "b",
+	})
+	if err != nil {
+		t.Fatalf("completing applications with model flag: %v", err)
+	}
+	assertEqualStrings(t, candidates, []string{"backend"})
+}
+
 func TestCompleteSwitchMergesControllersAndModels(t *testing.T) {
 	store := jujuclient.NewMemStore()
 	store.Controllers["test-36"] = jujuclient.ControllerDetails{}
@@ -103,9 +157,16 @@ func TestCompleteSwitchMergesControllersAndModels(t *testing.T) {
 
 func testSnapshot() Snapshot {
 	return Snapshot{Commands: []Command{
-		{Name: "config"},
+		{
+			Name:  "config",
+			Flags: []Flag{{Name: "model"}, {Name: "m"}},
+			Autocomplete: &basecmd.Autocomplete{Positionals: []basecmd.AutocompleteArg{
+				{Resources: []basecmd.AutocompleteResource{{Kind: basecmd.AutocompleteApplications}}},
+				{Resources: []basecmd.AutocompleteResource{{Kind: basecmd.AutocompleteApplicationConfig, FromPositional: basecmd.AutocompleteReference(0)}}, Repeat: true},
+			}},
+		},
 		{Name: "controllers"},
 		{Name: "deploy", Flags: []Flag{{Name: "channel"}, {Name: "config"}, {Name: "constraints"}}},
-		{Name: "switch"},
+		{Name: "switch", Autocomplete: &basecmd.Autocomplete{Positionals: []basecmd.AutocompleteArg{{Resources: []basecmd.AutocompleteResource{{Kind: basecmd.AutocompleteControllers}, {Kind: basecmd.AutocompleteModels}}}}}},
 	}}
 }

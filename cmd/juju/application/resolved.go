@@ -47,6 +47,9 @@ func (c *resolvedCommand) Info() *cmd.Info {
 		Purpose:  "Marks unit errors resolved and re-executes failed hooks.",
 		Aliases:  []string{"resolve"},
 		Examples: resolvedCommandExamples,
+		Autocomplete: &cmd.Autocomplete{Positionals: []cmd.AutocompleteArg{
+			{Resources: []cmd.AutocompleteResource{{Kind: cmd.AutocompleteUnits}}, Repeat: true},
+		}},
 	})
 }
 

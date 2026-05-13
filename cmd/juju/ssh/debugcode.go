@@ -77,6 +77,9 @@ func (c *debugCodeCommand) Info() *cmd.Info {
 		Purpose:  "Launch a tmux session to debug hooks and/or actions.",
 		Doc:      debugCodeDoc,
 		Examples: usageDebugCodeExamples,
+		Autocomplete: &cmd.Autocomplete{Positionals: []cmd.AutocompleteArg{
+			{Resources: []cmd.AutocompleteResource{{Kind: cmd.AutocompleteUnits}}},
+		}},
 		SeeAlso: []string{
 			"ssh",
 			"debug-hooks",
