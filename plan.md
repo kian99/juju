@@ -1,217 +1,216 @@
-# Plan: Juju Autocompletion — New `juju-complete` Binary
+# Plan: Juju Autocompletion — Implemented `juju-completion` Backend
 
 ## TL;DR
 
-Replace the slow bash/Python completion script with a standalone `juju-complete` Go binary. It
-builds the full command/flag tree in-process at startup from a committed static JSON artifact
-(generated at build time), handles dynamic entities via local YAML parsing (Mode A) or direct
-API + TTL cache (Mode B), and ships thin bash/zsh shell scripts. Snap support is included by
-bundling the binary and scripts into the snap.
+The implementation moved Juju bash completion to a separate `juju-completion` Go binary plus a
+thin shell wrapper.
 
-## Decisions
+The shell layer now only forwards Bash completion state to the backend. The backend builds static
+command and flag metadata directly from Juju's registered commands at runtime, and resolves dynamic
+controller, model, application, unit, and machine completions from local client state and `juju`
+command output.
 
-- **Binary**: separate `juju-complete` binary (not embedded in `juju`); avoids slow CLI init on
-  every tab press
-- **Static JSON**: build-time artifact — generated during `make generate-completion-json`,
-  committed to the repo
-- **Shells**: bash + zsh for MVP; fish deferred
-- **REPL completion**: explicitly out of scope
-- **Snap support**: in scope — bundle binary + updated shell scripts in snap
+This replaced the previous large bash/Python completion script and superseded the earlier
+`juju-complete` prototype package.
 
----
+## Final decisions
 
-## Current State
-
-- `etc/bash_completion.d/juju` — ~500-line bash/Python script; calls `juju help commands` on
-  every tab, `juju help <cmd>` for flags, `juju status --format json` for entities (cached 2 min).
-  Minimal zsh shims, no fish, no REPL.
-- `cmd/juju/commands/repl.go` — readline REPL has a `// TODO: add auto complete support` stub,
-  never implemented (out of scope).
-- CLI framework: custom (`cmd/cmd` + `github.com/juju/gnuflag`). `SuperCommand` holds
-  `subcmds map[string]commandReference`. Reference pattern: `documentationCommand` in
-  `cmd/cmd/documentation.go` walks `c.super.subcmds`, calls `cmd.Info()` + `SetFlags()` per
-  command.
-- Snap: `snap/snapcraft.yaml` already bundles `etc/bash_completion.d/juju` into
-  `usr/share/bash-completion/completions/juju` and registers it via `completer:`.
+- **Binary**: use a separate `juju-completion` binary rather than embedding completion in `juju`
+- **Shell**: keep Bash as a thin adapter only; move Juju-specific logic into Go
+- **Static metadata**: generate command and flag metadata at runtime from `commands.RegisterCommands`
+  rather than from a committed JSON artifact
+- **Dynamic metadata**: use the Juju client store for controllers and models, and use `juju switch`
+  plus `juju status --format json` for model-scoped entities
+- **Tests**: add focused Go tests for metadata extraction, backend providers, and completion routing
+- **Documentation**: add installation and developer testing documentation for the new flow
+- **Scope**: Bash is implemented; zsh, fish, REPL completion, snap packaging changes, and caching
+  remain deferred
 
 ---
 
-## Steps
+## What was implemented
 
-### Phase 1 — Benchmark Current System
+### 1. Separate backend binary
 
-1. Write `scripts/bench-completion.sh`:
-   - Cold: `time juju help commands` (no cache)
-   - Warm: repeat 10×, measure p50/p99
-   - Flag: `time juju help deploy 2>/dev/null`
-   - Entity (API): `time juju status --format json`
-2. Document which completions work today and which are missing (native zsh, fish, REPL).
-3. Record baseline numbers in `docs/contributor/reference/autocompletion-benchmark.md`.
+A new backend binary lives in `cmd/juju-completion/`.
 
-### Phase 2 — Static JSON Generator
+Implemented entrypoints:
 
-**New tool**: `cmd/juju-complete/generate/main.go`
+- `describe`
+- `commands`
+- `flags <command>`
+- `controllers`
+- `models`
+- `applications --model <model>`
+- `units --model <model> [--suffix value]`
+- `machines --model <model>`
+- `complete --cword N --current VALUE --word ...`
 
-- Instantiate the juju command tree via `commands.NewJujuCommandWithStore(...)`.
-- Walk `SuperCommand.subcmds` (same pattern as `documentationCommand` in
-  `cmd/cmd/documentation.go`): for each command call `cmd.Info()` and `SetFlags()` on a fresh
-  `gnuflag.FlagSet`.
-- Output `internal/completion/static.json` with shape:
-  ```json
-  {
-    "commands": {
-      "<name>": {
-        "aliases": ["..."],
-        "args_hint": "<string>",
-        "flags": {
-          "<flag>": { "type": "<string>", "description": "<string>", "short": "<char>" }
-        }
-      }
-    }
-  }
-  ```
-- Add `make generate-completion-json` Makefile target; commit the generated file.
+The `complete` subcommand is the shell-facing protocol used by the Bash wrapper.
 
-### Phase 3 — `juju-complete` Binary (`cmd/juju-complete/`)
+### 2. Runtime static metadata snapshot
 
-**Depends on Phase 2.**
+Static command and flag completion is implemented in `cmd/juju/completion/metadata.go`.
 
-For the exploratory/debugging version, do not write tests. Keep the binary small and inspectable
-while the shell input shape is still being discovered. Validate manually by enabling completion
-and observing the debug output from real shell invocations.
+The backend does not scrape help output and does not load a generated JSON file. Instead it:
 
-**3a — `tree.go`** — load `internal/completion/static.json` at binary init; no subprocess, no
-API connection.
+- calls `commands.RegisterCommands`
+- records command names, aliases, args, and purpose
+- builds a fresh `gnuflag.FlagSet` per command
+- captures registered flags directly from `SetFlags`
 
-**3b — `complete.go`** — given `[]string` words and cursor position:
-1. `len(words) == 1` → return all command names + aliases.
-2. `len(words) >= 2`, word[1] is known, current word starts with `-` → return that command's
-   flags.
-3. Detect flag-value context:
-   - `--model`/`-m`, `--controller`/`-c` → Mode A (local store)
-   - `--unit`, `--machine`, `--application` → Mode B (API cache)
-4. Positional arg hints from `args_hint` (documented; not auto-completed in this version).
+To support that, `cmd/juju/commands/main.go` exports the registration hook used by completion.
 
-**3c — `localstore.go` (Mode A, offline)** — read `~/.local/share/juju/` directly (no
-subprocess):
-- Controllers: parse `controllers.yaml`
-- Models: parse `models/<controller>-<user>-models.yaml`
-- Active model: read `current-controller` + models file for current model name
-- ~1ms, works offline
+### 3. Backend providers for dynamic entities
 
-**3d — `apicache.go` (Mode B, direct API + cache)** — connect via `api/connector` using
-existing auth providers (session token → `SessionTokenLoginProvider`; password →
-`LegacyLoginProvider`; macaroons via cookie jar):
-- Units, apps, machines: `client.NewClient(conn).Status(ctx, nil)` → `*params.FullStatus`
-- Models: `modelmanager.NewClient(conn).ListModels(ctx, user)` (controller-scoped connection)
-- Cache to `~/.cache/juju/complete-<controller>-<model>-<entity>.json`, TTL 120s (configurable)
-- Serve stale cache immediately + background goroutine refresh
-- On cache miss: attempt API with 3s dial timeout; return empty on timeout — never block shell
+Dynamic completion is implemented in `cmd/juju/completion/backend.go`.
 
-**3e — `main.go`**:
-```
-juju-complete [flags] -- word1 word2 ... wordN
-  --shell bash|zsh        output format (default: bash)
-  --position N            cursor word index (default: last)
-  --dump-script bash|zsh  print shell integration snippet and exit
-  --ttl N                 cache TTL override in seconds
-```
-- Outputs newline-separated candidates to stdout.
-- Exit 0 always (shell completion must never error visibly).
+Current providers:
 
-### Phase 4 — Shell Integration Scripts *(parallel with Phase 3)*
+- **Controllers**: from `jujuclient.NewFileClientStore().AllControllers()`
+- **Models**: from `AllModels(controller)`, returning `controller:model` entries for every
+  controller and bare model names for the current controller
+- **Current model resolution**:
+  - use `JUJU_MODEL` when present
+  - otherwise run `juju switch`
+- **Applications / units / machines**:
+  - resolve the target model
+  - run `juju status --model <model> --format json`
+  - parse `params.FullStatus`
+  - extract entities from the returned status document
 
-**4a — Bash** (`etc/bash_completion.d/juju` — replace existing):
-```bash
-_juju() {
-    local IFS=$'\n'
-    COMPREPLY=($(juju-complete --shell bash -- "${COMP_WORDS[@]}"))
-}
-complete -F _juju juju
-```
+This deliberately avoids the older direct API connection approach and the original local YAML / API
+cache split proposed in the first draft of the plan.
 
-**4b — Zsh** (`etc/zsh/completions/_juju` — new file):
-```zsh
-#compdef juju
-_juju() {
-    local -a comps
-    comps=(${(f)"$(juju-complete --shell zsh -- ${words[@]})"})
-    _describe 'juju' comps
-}
-```
+### 4. Shell completion routing in Go
 
-**4c — Makefile** — new targets:
-- `make generate-completion-json` → regenerate `internal/completion/static.json`
-- `make install-completion` → install binary + both shell scripts
-- `make install-bash-completion`
-- `make install-zsh-completion`
-- Local exploratory targets:
-  - `make enable-zsh-completion` → install local `juju`/`juju-complete`, write
-    `${JUJU_DATA:-.juju}/zsh/site-functions/_juju`, then print the `fpath`/`compinit` command
-    needed to enable it in the current zsh session.
-  - `make enable-bash-completion` → install local `juju`/`juju-complete`, write
-    `${JUJU_DATA:-.juju}/bash_completion.d/juju`, then print the `source` command needed to
-    enable it in the current bash session.
+Completion request routing lives in `cmd/juju/completion/complete.go`.
 
-Local enablement examples:
+The current behavior is:
 
-```zsh
-make enable-zsh-completion
-fpath=(${JUJU_DATA:-.juju}/zsh/site-functions $fpath)
-autoload -Uz compinit && compinit
-```
+- first command position completes Juju commands and aliases
+- `juju help ...` completes commands
+- current token starting with `-` completes flags for the selected command
+- `--controller` / `-c` completes controllers
+- `--model` / `-m` completes models
+- `--application` completes applications
+- `--unit` completes units
+- `--machine` completes machines
+- selected positional commands complete dynamic entities in a small explicit routing table
 
-```bash
-make enable-bash-completion
-source ${JUJU_DATA:-.juju}/bash_completion.d/juju
-```
+Implemented positional routing includes:
 
-### Phase 5 — Snap Support
+- `switch` → controllers and models
+- `config`, `refresh`, `expose`, `unexpose`, `remove-application`, `application-storage`,
+  `constraints`, `set-constraints`, `set-application-base` → applications
+- `status` → applications and units
+- `ssh`, `scp`, `debug-hooks`, `debug-code` → units and machines
+- `resolved`, `remove-unit` → units
+- `show-machine`, `remove-machine`, `upgrade-machine` → machines
 
-- Add `go install ... github.com/juju/juju/cmd/juju-complete` to the snap build step in
-  `snap/snapcraft.yaml` alongside the existing `cmd/juju` install.
-- Extend the completion install loop to also copy `etc/zsh/completions/_juju` to
-  `usr/share/zsh/vendor-completions/`.
-- The existing `completer: usr/share/bash-completion/completions/juju` key in `snapcraft.yaml`
-  already handles bash wiring; the thin wrapper calls `juju-complete` which is on `$PATH` inside
-  the snap.
+### 5. Thin Bash wrapper
 
-### Phase 6 — Benchmark New System
+`etc/bash_completion.d/juju` was reduced to a thin Bash adapter.
 
-Repeat Phase 1 script against `juju-complete`:
-- Static (commands, flags): expect <50ms
-- Dynamic Mode A (controllers/models): expect <5ms
-- Dynamic Mode B (units/apps, cache hit): expect <10ms; cache miss: same as today
-- Correctness: diff outputs of old vs new for the same inputs
+The wrapper now:
+
+- finds the `juju-completion` binary
+- reads `COMP_WORDS` and `COMP_CWORD`
+- calls `juju-completion complete ...`
+- loads newline-separated results into `COMPREPLY`
+
+The previous large Bash script and its Bash/Python heuristics were removed.
+
+### 6. Documentation and tests
+
+Documentation was added in `docs/howto/manage-bash-auto-completion.md` and linked from
+`docs/howto/index.md`.
+
+Focused tests were added for:
+
+- static metadata extraction
+- backend controller/model/application/unit/machine providers
+- shell completion routing
+
+The previous draft plan said not to add tests while the protocol was exploratory. The implemented
+version did add tests because the request/response shape settled quickly and the routing logic was
+small enough to lock down safely.
+
+### 7. Old prototype removal
+
+The previous `cmd/juju-complete/` package was removed in favor of the final
+`cmd/juju-completion/` backend.
 
 ---
 
-## Key Files
+## What changed from the original proposal
 
-- [etc/bash_completion.d/juju](etc/bash_completion.d/juju) — replace with thin bash wrapper
-- `etc/zsh/completions/_juju` — new zsh integration script
-- [cmd/cmd/documentation.go](cmd/cmd/documentation.go) — reference pattern (walk subcmds +
-  SetFlags)
-- [cmd/cmd/supercommand.go](cmd/cmd/supercommand.go) — `SuperCommand.subcmds`,
-  `commandReference` type
-- [cmd/juju/commands/main.go](cmd/juju/commands/main.go) — `NewJujuCommandWithStore`,
-  `registerCommands`
-- [cmd/juju/commands/repl.go](cmd/juju/commands/repl.go) — REPL readline TODO stub (out of
-  scope)
-- `cmd/juju-complete/` — new package (all new files)
-- `cmd/juju-complete/generate/` — static JSON generator tool
-- `internal/completion/static.json` — generated command/flag tree (committed)
-- [Makefile](Makefile) — new targets
-- [snap/snapcraft.yaml](snap/snapcraft.yaml) — add `juju-complete` binary + zsh completion
+The final implementation differs from the original plan in a few important ways.
 
-## Verification
+### Implemented instead of planned
 
-Do not add or require new tests while the completion protocol is still exploratory. Prefer
-manual validation and benchmarks until the input/output contract is stable.
+- `juju-completion` was used as the final binary name instead of `juju-complete`
+- runtime metadata extraction replaced the planned generated static JSON file
+- direct shelling to `juju switch` and `juju status --format json` replaced the planned local YAML
+  parser plus API cache split
+- focused Go tests were added instead of keeping the implementation test-free
+- Bash support and documentation landed; zsh support and broader packaging work did not
 
-1. `go build ./cmd/juju-complete`
-2. `make pre-check` (golangci-lint + gci) before submitting non-exploratory changes
-3. Manual bash: source bash script, tab-complete `juju dep<TAB>`, `juju deploy --<TAB>`,
-   `juju ssh -m <TAB>`
-4. Manual zsh: `compinit`, same tests
-5. Run benchmark script, compare Phase 1 vs Phase 6 numbers
+### Not implemented from the original draft
+
+- generated `internal/completion/static.json`
+- `cmd/juju-complete/generate/`
+- zsh completion script
+- Makefile completion helper targets
+- snap packaging changes for the new backend
+- benchmark script and benchmark documentation
+- REPL completion support
+- stale-cache / background-refresh behavior for dynamic completions
+
+---
+
+## Current limitations
+
+- The current thin wrapper only targets Bash.
+- Live completion for applications, units, and machines depends on `juju status` succeeding
+  non-interactively for the selected model.
+- There is no cache layer yet for status-backed completion.
+- Completion routing is intentionally explicit and currently covers the command set implemented in
+  `complete.go`; it is not yet a generic positional completion framework.
+
+---
+
+## Key files
+
+- `cmd/juju-completion/main.go` — backend entrypoint and shell-facing `complete` command
+- `cmd/juju/completion/metadata.go` — runtime command and flag snapshot generation
+- `cmd/juju/completion/backend.go` — controller, model, application, unit, and machine providers
+- `cmd/juju/completion/complete.go` — routing from shell context to candidate sets
+- `cmd/juju/commands/main.go` — exported command registration hook for completion metadata
+- `etc/bash_completion.d/juju` — thin Bash wrapper
+- `docs/howto/manage-bash-auto-completion.md` — install and developer testing instructions
+
+## Validation performed
+
+Focused validation for the implemented approach is:
+
+1. `go test ./cmd/juju/completion`
+2. `go build ./cmd/juju-completion`
+3. `bash -n ./etc/bash_completion.d/juju`
+4. shell simulation of command completion:
+   - `juju help c`
+5. shell simulation of flag completion:
+   - `juju deploy --c`
+
+Live model-backed completion was only partially validated because the environment can still prompt
+for interactive Juju credentials when `juju status` is invoked.
+
+## Follow-up work
+
+If this work continues, the next logical slices are:
+
+1. add zsh support with the same backend protocol
+2. decide whether model-backed completion needs caching to avoid repeated `juju status` calls
+3. expand positional completion coverage command by command
+4. wire the backend and wrapper into packaging and snap installation flows
+5. benchmark the backend path against the removed legacy shell script
