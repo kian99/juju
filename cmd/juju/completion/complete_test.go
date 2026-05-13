@@ -68,6 +68,24 @@ func TestCompleteFlagsForBareDoubleDash(t *testing.T) {
 	assertEqualStrings(t, candidates, []string{"--color", "--format"})
 }
 
+func TestCompleteFlagsForBareSingleDash(t *testing.T) {
+	backend := &Backend{
+		Store:         jujuclient.NewMemStore(),
+		currentModel:  unreachableCurrentModel,
+		statusFetcher: unreachableStatusFetcher,
+	}
+
+	candidates, err := backend.Complete(testSnapshot(), Request{
+		Words:   []string{"juju", "config", "-"},
+		Cword:   2,
+		Current: "-",
+	})
+	if err != nil {
+		t.Fatalf("completing bare single-dash flags: %v", err)
+	}
+	assertEqualStrings(t, candidates, []string{"--model", "-m"})
+}
+
 func TestCompleteCommandNamesUsePrefixMatching(t *testing.T) {
 	backend := &Backend{
 		Store:         jujuclient.NewMemStore(),

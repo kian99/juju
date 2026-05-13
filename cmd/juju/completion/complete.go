@@ -232,7 +232,7 @@ func parseFlagToken(token string) (string, bool, bool) {
 }
 
 func isFlagLike(token string) bool {
-	if token == "--" {
+	if token == "-" || token == "--" {
 		return true
 	}
 	_, hasValue, ok := parseFlagToken(token)
