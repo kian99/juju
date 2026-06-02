@@ -882,6 +882,23 @@ VALUES (?, '0')`, relUUID)
 	c.Check(connections[0].IngressSubnets, tc.IsNil)
 }
 
+func (s *modelOfferSuite) TestGetOfferConnectionsWithoutRelationStatus(c *tc.C) {
+	offerUUID, consumerModelUUID, _ := s.addOfferConnectionWithConsumer(c)
+
+	connections, err := s.state.GetOfferConnections(c.Context(), []string{offerUUID})
+
+	c.Assert(err, tc.ErrorIsNil)
+	c.Assert(connections, tc.HasLen, 1)
+	c.Check(connections[0].OfferUUID, tc.Equals, offerUUID)
+	c.Check(connections[0].SourceModelUUID, tc.Equals, consumerModelUUID)
+	c.Check(connections[0].Username, tc.Equals, "consumer-user")
+	c.Check(connections[0].Endpoint, tc.Equals, "db")
+	c.Check(connections[0].Status, tc.Equals, "")
+	c.Check(connections[0].Message, tc.Equals, "")
+	c.Check(connections[0].StatusSince, tc.IsNil)
+	c.Check(connections[0].IngressSubnets, tc.IsNil)
+}
+
 func (s *modelOfferSuite) TestGetOfferConnectionsNoConnections(c *tc.C) {
 	connections, err := s.state.GetOfferConnections(c.Context(), []string{internaluuid.MustNewUUID().String()})
 	c.Assert(err, tc.ErrorIsNil)

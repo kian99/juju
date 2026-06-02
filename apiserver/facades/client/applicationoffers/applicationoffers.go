@@ -441,21 +441,14 @@ func (api *OffersAPI) applicationOffersFromModel(
 		results = append(results, result)
 	}
 
-	// If the required access level is *only* read, then return the results at
-	// this point without populating the offer connections. Offer connections
-	// are only relevant to users with admin access.
-	if requiredAccess == permission.ReadAccess {
+	// Offer connections are only returned to verified model admins. Preserve
+	// the basic offer details for all other callers.
+	if len(results) == 0 || !isModelAdmin {
 		return results, nil
 	}
 
-	// If the user is not a model admin or there are no results,
-	// return the results without populating the offer connections.
-	if !isModelAdmin || len(results) == 0 {
-		return results, nil
-	}
-
-	// Populate offer connections only when the caller requires admin access
-	// (i.e. ListApplicationOffers) and the user is verified as model admin.
+	// Populate offer connections for model admins regardless of whether the
+	// request came from a read-only or admin-only endpoint.
 	offerIndexByUUID := make(map[string]int, len(results))
 	for i, r := range results {
 		offerIndexByUUID[r.OfferUUID] = i

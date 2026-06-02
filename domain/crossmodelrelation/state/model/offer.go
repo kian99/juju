@@ -579,27 +579,35 @@ func (st *State) GetOfferConnections(
 		return nil, errors.Capture(err)
 	}
 
-	// Query connection details: relation id, username, consumer model UUID,
-	// endpoint name, and relation status.
+	// Query connection details from offer_connection and left-join any
+	// enrichment rows so lingering connections remain visible while teardown
+	// is still removing relation metadata.
 	connStmt, err := st.Prepare(`
+WITH offer_endpoint_name AS (
+    SELECT re.relation_uuid AS relation_uuid,
+	    oe.offer_uuid    AS offer_uuid,
+	    cr.name          AS endpoint_name
+    FROM   relation_endpoint AS re
+    JOIN   offer_endpoint AS oe ON oe.endpoint_uuid = re.endpoint_uuid
+    JOIN   application_endpoint AS ae ON oe.endpoint_uuid = ae.uuid
+    JOIN   charm_relation AS cr ON ae.charm_relation_uuid = cr.uuid
+)
 SELECT oc.offer_uuid            AS &offerConnectionDetail.offer_uuid,
-       r.relation_id            AS &offerConnectionDetail.relation_id,
+	COALESCE(r.relation_id, 0) AS &offerConnectionDetail.relation_id,
        oc.username              AS &offerConnectionDetail.username,
-       arc.consumer_model_uuid  AS &offerConnectionDetail.consumer_model_uuid,
-       cr.name                  AS &offerConnectionDetail.endpoint_name,
-       rst.name                 AS &offerConnectionDetail.status,
+	COALESCE(arc.consumer_model_uuid, '') AS &offerConnectionDetail.consumer_model_uuid,
+	COALESCE(oen.endpoint_name, '') AS &offerConnectionDetail.endpoint_name,
+	COALESCE(rst.name, '')   AS &offerConnectionDetail.status,
        rs.message               AS &offerConnectionDetail.message,
        rs.updated_at            AS &offerConnectionDetail.updated_at
 FROM   offer_connection AS oc
-JOIN   relation AS r ON oc.remote_relation_uuid = r.uuid
-JOIN   application_remote_consumer AS arc ON oc.uuid = arc.offer_connection_uuid
-JOIN   relation_endpoint AS re ON r.uuid = re.relation_uuid
-JOIN   application_endpoint AS ae
-       ON re.endpoint_uuid = ae.uuid
-       AND ae.application_uuid = arc.offerer_application_uuid
-JOIN   charm_relation AS cr ON ae.charm_relation_uuid = cr.uuid
-JOIN   relation_status AS rs ON r.uuid = rs.relation_uuid
-JOIN   relation_status_type AS rst ON rs.relation_status_type_id = rst.id
+LEFT JOIN relation AS r ON oc.remote_relation_uuid = r.uuid
+LEFT JOIN application_remote_consumer AS arc ON oc.uuid = arc.offer_connection_uuid
+LEFT JOIN offer_endpoint_name AS oen
+	ON oen.relation_uuid = oc.remote_relation_uuid
+	AND oen.offer_uuid = oc.offer_uuid
+LEFT JOIN relation_status AS rs ON oc.remote_relation_uuid = rs.relation_uuid
+LEFT JOIN relation_status_type AS rst ON rs.relation_status_type_id = rst.id
 WHERE  oc.offer_uuid IN ($uuids[:])
 `, offerConnectionDetail{}, uuids{})
 	if err != nil {
