@@ -279,12 +279,16 @@ func (s *loginTokenSuite) TestNotAvailableJWTParser(c *tc.C) {
 }
 
 func requestWithModelContext(c *tc.C, modelUUID string, req *http.Request) *http.Request {
+	query := req.URL.Query()
+	query.Add("modeluuid", modelUUID)
+	req.URL.RawQuery = query.Encode()
+
 	var modelReq *http.Request
-	handler := &httpcontext.ImpliedModelHandler{
+	handler := &httpcontext.QueryModelHandler{
 		Handler: http.HandlerFunc(func(_ http.ResponseWriter, req *http.Request) {
 			modelReq = req
 		}),
-		ModelUUID: modelUUID,
+		Query: "modeluuid",
 	}
 	handler.ServeHTTP(httptest.NewRecorder(), req)
 	c.Assert(modelReq, tc.NotNil)
