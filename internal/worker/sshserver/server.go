@@ -20,8 +20,6 @@ import (
 	"github.com/juju/juju/core/virtualhostname"
 )
 
-type authenticatedViaPublicKey struct{}
-
 // SessionHandler is an interface that proxies SSH sessions to a target unit/machine.
 type SessionHandler interface {
 	Handle(s ssh.Session, destination virtualhostname.Info)
