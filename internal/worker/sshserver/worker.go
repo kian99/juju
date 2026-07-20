@@ -5,6 +5,7 @@ package sshserver
 
 import (
 	"context"
+	"net"
 	"sync"
 
 	"github.com/juju/errors"
@@ -39,6 +40,12 @@ type SSHModelService interface {
 	VirtualHostKey(context.Context, virtualhostname.Info) (string, error)
 }
 
+// TunnelTracker accepts and creates reverse SSH tunnels.
+type TunnelTracker interface {
+	AuthenticateTunnel(username, password string) (string, error)
+	PushTunnel(context.Context, string, net.Conn) error
+}
+
 // Logger is the subset of logger.Logger used by SSH server helpers.
 type Logger interface {
 	Errorf(context.Context, string, ...any)
@@ -56,6 +63,11 @@ type ServerWrapperWorkerConfig struct {
 	SSHService              SSHService
 	NewServerWorker         func(ServerWorkerConfig) (worker.Worker, error)
 	Logger                  logger.Logger
+	Authenticator           authenticator
+	Authorizer              authorizer
+	ProxyFactory            ProxyFactory
+	TunnelTracker           TunnelTracker
+	Metrics                 *Collector
 	SessionHandler          SessionHandler
 }
 
@@ -73,7 +85,7 @@ func (c ServerWrapperWorkerConfig) Validate() error {
 	if c.Logger == nil {
 		return errors.NotValidf("Logger is required")
 	}
-	if c.SessionHandler == nil {
+	if c.SessionHandler == nil && c.ProxyFactory == nil {
 		return errors.NotValidf("SessionHandler is required")
 	}
 	return nil
@@ -177,6 +189,11 @@ func (ssw *serverWrapperWorker) loop() error {
 		Port:                     port,
 		MaxConcurrentConnections: maxConns,
 		SSHService:               ssw.config.SSHService,
+		Authenticator:            ssw.config.Authenticator,
+		Authorizer:               ssw.config.Authorizer,
+		ProxyFactory:             ssw.config.ProxyFactory,
+		TunnelTracker:            ssw.config.TunnelTracker,
+		Metrics:                  ssw.config.Metrics,
 		SessionHandler:           ssw.config.SessionHandler,
 	})
 	ssw.addWorkerReporter("ssh-server", srv)
