@@ -43,10 +43,7 @@ func (a authorizer) authorize(ctx ssh.Context, destination virtualhostname.Info)
 		a.logger.Errorf(ctx, "SSH JWT is missing from connection context")
 		return false
 	}
-	return hasJWTModelAdminAccess(token, destination)
-}
 
-func hasJWTModelAdminAccess(token jwt.Token, destination virtualhostname.Info) bool {
 	claims, ok := token.PrivateClaims()["access"].(map[string]any)
 	if !ok {
 		return false
