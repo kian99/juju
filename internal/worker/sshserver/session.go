@@ -1,4 +1,4 @@
-// Copyright 2025 Canonical Ltd.
+// Copyright 2026 Canonical Ltd.
 // Licensed under the AGPLv3, see LICENCE file for details.
 
 package sshserver
@@ -10,59 +10,68 @@ import (
 	"github.com/juju/errors"
 	gossh "golang.org/x/crypto/ssh"
 
-	"github.com/juju/juju/core/logger"
 	"github.com/juju/juju/core/model"
 	"github.com/juju/juju/core/virtualhostname"
 )
 
-type stubSessionHandler struct{}
-
-// Handle is a stub implementation of the SessionHandler interface.
-// It currently does nothing but will be replaced with a real implementation
-// that proxies user's requests to the target unit or machine.
-func (s *stubSessionHandler) Handle(session ssh.Session, destination virtualhostname.Info) {
+// SessionHandler is the legacy, test-only seam for a terminating session
+// handler. The production server uses ProxyFactory and target-specific
+// handlers instead.
+type SessionHandler interface {
+	Handle(ssh.Session, virtualhostname.Info)
 }
 
-// SSHConnector is an interface that defines the methods required to
-// connect to a remote SSH server.
+// stubSessionHandler is retained only for existing worker lifecycle tests.
+// Production session handling is created by ProxyFactory.
+type stubSessionHandler struct{}
+
+func (*stubSessionHandler) Handle(ssh.Session, virtualhostname.Info) {}
+
+type sessionHandlerProxy struct {
+	handler     SessionHandler
+	destination virtualhostname.Info
+}
+
+func (p sessionHandlerProxy) SessionHandler(session ssh.Session) {
+	p.handler.Handle(session, p.destination)
+}
+
+func (sessionHandlerProxy) DirectTCPIPHandler() ssh.ChannelHandler {
+	return func(_ *ssh.Server, _ *gossh.ServerConn, newChan gossh.NewChannel, _ ssh.Context) {
+		_ = newChan.Reject(gossh.Prohibited, "not implemented")
+	}
+}
+
+func (sessionHandlerProxy) SFTPHandler() ssh.SubsystemHandler {
+	return func(session ssh.Session) {
+		_, _ = session.Stderr().Write([]byte("not implemented\n"))
+		_ = session.Exit(1)
+	}
+}
+
+// SSHConnector is retained for focused unit tests of the machine session
+// bridge. Production proxying uses handlers/machine through ProxyFactory.
 type SSHConnector interface {
-	Connect(destination virtualhostname.Info) (*gossh.Client, error)
+	Connect(virtualhostname.Info) (*gossh.Client, error)
 }
 
 type sessionHandler struct {
 	connector SSHConnector
 	modelType model.ModelType
-	logger    logger.Logger
+	logger    Logger
 }
 
-// Handle proxies a user's SSH session to a target unit or machines.
-// Connections to machine will be proxied to the machine's SSH server.
-// Connections to k8s units will be proxied through the k8s API server.
 func (s *sessionHandler) Handle(session ssh.Session, destination virtualhostname.Info) {
-	handleError := func(err error) {
-		s.logger.Errorf(context.Background(), "proxy failure: %v", err)
-		_, _ = session.Stderr().Write([]byte(err.Error() + "\n"))
+	if s.modelType != model.IAAS {
+		_, _ = session.Stderr().Write([]byte("unsupported model type\n"))
+		_ = session.Exit(1)
+		return
+	}
+	if err := s.machineSessionProxy(session, destination); err != nil {
+		s.logger.Errorf(context.Background(), "machine session proxy failure: %v", err)
+		_, _ = session.Stderr().Write([]byte("failed to proxy machine session: " + err.Error() + "\n"))
 		_ = session.Exit(1)
 	}
-
-	switch s.modelType {
-	case model.CAAS:
-		if err := s.k8sSessionProxy(session); err != nil {
-			err = errors.Annotate(err, "failed to proxy k8s session")
-			handleError(err)
-		}
-	case model.IAAS:
-		if err := s.machineSessionProxy(session, destination); err != nil {
-			err = errors.Annotate(err, "failed to proxy machine session")
-			handleError(err)
-		}
-	default:
-		handleError(errors.Errorf("unknown model type %s", s.modelType))
-	}
-}
-
-func (s *sessionHandler) k8sSessionProxy(_ ssh.Session) error {
-	return errors.New("k8s session proxy not implemented")
 }
 
 func (s *sessionHandler) machineSessionProxy(userSession ssh.Session, destination virtualhostname.Info) error {
@@ -72,49 +81,35 @@ func (s *sessionHandler) machineSessionProxy(userSession ssh.Session, destinatio
 	}
 	defer client.Close()
 
-	machineSSHSession, err := client.NewSession()
+	machineSession, err := client.NewSession()
 	if err != nil {
 		return err
 	}
-	defer machineSSHSession.Close()
-
-	machineSSHSession.Stdin = userSession
-	machineSSHSession.Stdout = userSession
-	machineSSHSession.Stderr = userSession.Stderr()
-
-	err = s.setupShellOrCommand(userSession, machineSSHSession)
-	if err != nil {
+	defer machineSession.Close()
+	machineSession.Stdin = userSession
+	machineSession.Stdout = userSession
+	machineSession.Stderr = userSession.Stderr()
+	if err := setupLegacyShellOrCommand(userSession, machineSession); err != nil {
 		return err
 	}
-
-	return machineSSHSession.Wait()
+	return machineSession.Wait()
 }
 
-func (*sessionHandler) setupShellOrCommand(userSession ssh.Session, machineSSHSession *gossh.Session) error {
-	pty, windowChan, isPty := userSession.Pty()
-	if isPty {
-		// The Gliderlabs SSH server doesn't properly handle terminal modes.
-		// See https://github.com/gliderlabs/ssh/issues/98
-		// and https://github.com/gliderlabs/ssh/pull/210
-		// This will impact terminal behaviour for interactive sessions but can be
-		// addressed by using the above patches in a fork of the Gliderlabs SSH server.
-		if err := machineSSHSession.RequestPty(pty.Term, pty.Window.Height, pty.Window.Width, gossh.TerminalModes{
-			gossh.ECHO: 1,
-		}); err != nil {
-			return err
-		}
-		if err := machineSSHSession.Shell(); err != nil {
-			return err
-		}
-
-		// Handle window size changes
-		go func() {
-			for w := range windowChan {
-				_ = machineSSHSession.WindowChange(w.Height, w.Width)
-			}
-		}()
-	} else {
-		return machineSSHSession.Start(userSession.RawCommand())
+func setupLegacyShellOrCommand(userSession ssh.Session, machineSession *gossh.Session) error {
+	pty, windowChanges, hasPTY := userSession.Pty()
+	if !hasPTY {
+		return machineSession.Start(userSession.RawCommand())
 	}
+	if err := machineSession.RequestPty(pty.Term, pty.Window.Height, pty.Window.Width, gossh.TerminalModes{gossh.ECHO: 1}); err != nil {
+		return errors.Trace(err)
+	}
+	if err := machineSession.Shell(); err != nil {
+		return errors.Trace(err)
+	}
+	go func() {
+		for window := range windowChanges {
+			_ = machineSession.WindowChange(window.Height, window.Width)
+		}
+	}()
 	return nil
 }

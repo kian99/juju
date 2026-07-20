@@ -40,8 +40,8 @@ import (
 	gossh "golang.org/x/crypto/ssh"
 )
 
-// chanConn fulfills the net.Conn interface without
-// the tcpChan having to hold laddr or raddr directly.
+// chanConn fulfills the net.Conn interface without the SSH channel having to
+// hold local or remote addresses directly.
 type chanConn struct {
 	gossh.Channel
 	laddr, raddr net.Addr

@@ -131,6 +131,8 @@ require (
 	k8s.io/utils v0.0.0-20251002143259-bc988d571ff4
 )
 
+require github.com/creack/pty v1.1.20
+
 require (
 	cloud.google.com/go/auth v0.17.0 // indirect
 	cloud.google.com/go/auth/oauth2adapt v0.2.8 // indirect
