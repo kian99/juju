@@ -926,6 +926,9 @@ func commonManifolds(config ManifoldsConfig) dependency.Manifolds {
 		// The ssh server worker runs on the controller machine.
 		sshServerName: ifController(sshserver.Manifold(sshserver.ManifoldConfig{
 			DomainServicesName:             domainServicesName,
+			SSHTunnelerName:                sshTunnelerName,
+			JWTParserName:                  jwtParserName,
+			ControllerID:                   config.ControllerID,
 			Logger:                         internallogger.GetLogger("juju.worker.sshserver"),
 			NewServerWrapperWorker:         sshserver.NewServerWrapperWorker,
 			NewServerWorker:                sshserver.NewServerWorker,
@@ -933,6 +936,8 @@ func commonManifolds(config ManifoldsConfig) dependency.Manifolds {
 			GetControllerSSHHostKeyService: sshserver.GetControllerSSHHostKeyService,
 			GetDomainServicesGetter:        sshserver.GetDomainServicesGetter,
 			GetSSHService:                  sshserver.GetSSHService,
+			PrometheusRegisterer:           config.PrometheusRegisterer,
+			NewMetricsCollector:            sshserver.NewMetricsCollector,
 		})),
 
 		// The ssh tunneler worker runs on the controller machine and creates
