@@ -5,6 +5,12 @@ package ssh
 
 import gossh "golang.org/x/crypto/ssh"
 
+// JujuTunnelChannel is the SSH channel type opened on a controller connection
+// to establish a reverse tunnel. It is a shared contract between the
+// controller-side sshtunneler worker, which accepts the channel, and the
+// machine-side sshsession worker, which opens it.
+const JujuTunnelChannel = "juju-tunnel"
+
 // PublicKey represents a single public ssh key for a user within a model.
 type PublicKey struct {
 	// Fingerprint is the calculated fingerprint of the ssh key.
