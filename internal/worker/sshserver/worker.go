@@ -39,6 +39,11 @@ type SSHModelService interface {
 	VirtualHostKey(context.Context, virtualhostname.Info) (string, error)
 }
 
+// Logger is the subset of logger.Logger used by SSH server helpers.
+type Logger interface {
+	Errorf(context.Context, string, ...any)
+}
+
 // SSHService resolves controller and terminating SSH host keys.
 type SSHService interface {
 	ControllerSSHHostKeyService
