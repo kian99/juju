@@ -45,22 +45,18 @@ type ServerWorkerConfig struct {
 	// SSHService resolves terminating SSH host keys for virtual destinations.
 	SSHService SSHService
 	// Authenticator authenticates jump and terminating SSH connections.
-	Authenticator authenticator
+	Authenticator Authenticator
 	// Authorizer checks whether an authenticated user may access a destination.
-	Authorizer authorizer
+	Authorizer Authorizer
 	// ProxyFactory creates target-specific session, forwarding, and SFTP handlers.
 	ProxyFactory ProxyFactory
 	// TunnelTracker accepts incoming reverse SSH tunnel connections.
 	TunnelTracker TunnelTracker
 	// Metrics collects connection and authentication metrics.
 	Metrics *Collector
-	// SessionHandler is a test seam for the legacy session proxy. Production
-	// wiring supplies ProxyFactory instead.
-	SessionHandler SessionHandler
-
-	// disableAuth is a test-only flag that disables authentication.
-	disableAuth bool
 }
+
+type connectionStartTime struct{}
 
 // Validate validates the workers configuration is as expected.
 func (c ServerWorkerConfig) Validate() error {
@@ -73,17 +69,16 @@ func (c ServerWorkerConfig) Validate() error {
 	if c.SSHService == nil {
 		return errors.NotValidf("missing SSHService")
 	}
-	if !c.disableAuth && (c.Authenticator.logger == nil || c.Authenticator.jwtParser == nil || c.Authenticator.keys == nil ||
-		c.Authenticator.tunnelTracker == nil || c.Authenticator.metrics == nil) {
-		return errors.NotValidf("incomplete Authenticator")
+	if c.Authenticator == nil {
+		return errors.NotValidf("missing Authenticator")
 	}
-	if !c.disableAuth && (c.Authorizer.access == nil || c.Authorizer.logger == nil) {
-		return errors.NotValidf("incomplete Authorizer")
+	if c.Authorizer == nil {
+		return errors.NotValidf("missing Authorizer")
 	}
-	if c.ProxyFactory == nil && c.SessionHandler == nil {
+	if c.ProxyFactory == nil {
 		return errors.NotValidf("missing ProxyFactory")
 	}
-	if !c.disableAuth && c.TunnelTracker == nil {
+	if c.TunnelTracker == nil {
 		return errors.NotValidf("missing TunnelTracker")
 	}
 	return nil
@@ -173,20 +168,15 @@ func (s *ServerWorker) NewJumpServer() *ssh.Server {
 	server := ssh.Server{
 		ConnCallback: s.connCallback(),
 		PublicKeyHandler: func(ctx ssh.Context, key ssh.PublicKey) bool {
-			return s.config.Authenticator.publicKeyAuthentication(ctx, key)
+			return s.config.Authenticator.PublicKeyAuthentication(ctx, key)
 		},
 		PasswordHandler: func(ctx ssh.Context, password string) bool {
-			return s.config.Authenticator.passwordAuthentication(ctx, password)
+			return s.config.Authenticator.PasswordAuthentication(ctx, password)
 		},
 		ChannelHandlers: map[string]ssh.ChannelHandler{
 			"direct-tcpip":            s.directTCPIPHandler,
 			coressh.JujuTunnelChannel: s.reverseTunnelHandler,
 		},
-	}
-
-	if s.config.disableAuth {
-		server.PublicKeyHandler = nil
-		server.PasswordHandler = nil
 	}
 
 	return &server
@@ -232,7 +222,7 @@ func (s *ServerWorker) directTCPIPHandler(srv *ssh.Server, conn *gossh.ServerCon
 		s.rejectChannel(ctx, newChan, "Failed to parse destination address")
 		return
 	}
-	if !s.config.disableAuth && !s.config.Authorizer.authorize(ctx, info) {
+	if !s.config.Authorizer.Authorize(ctx, info) {
 		s.rejectChannel(ctx, newChan, "unauthorized")
 		return
 	}
@@ -336,24 +326,9 @@ func (s *ServerWorker) connCallback() ssh.ConnCallback {
 // newTerminatingSSHServer creates an embedded SSH server that terminates the
 // user's SSH connection and proxies it to the routed target.
 func (s *ServerWorker) newTerminatingSSHServer(ctx ssh.Context, destination virtualhostname.Info) (*ssh.Server, error) {
-	var authenticator terminatingServerAuthenticator
-	if !s.config.disableAuth {
-		var err error
-		authenticator, err = s.config.Authenticator.newTerminatingServerAuthenticator(ctx, destination)
-		if err != nil {
-			return nil, errors.Trace(err)
-		}
-	}
-
-	var handlers ProxyHandlers
-	if s.config.ProxyFactory != nil {
-		var err error
-		handlers, err = s.config.ProxyFactory.New(ctx, destination)
-		if err != nil {
-			return nil, errors.Trace(err)
-		}
-	} else {
-		handlers = sessionHandlerProxy{handler: s.config.SessionHandler, destination: destination}
+	handlers, err := s.config.ProxyFactory.New(ctx, destination)
+	if err != nil {
+		return nil, errors.Trace(err)
 	}
 	if started, ok := ctx.Value(connectionStartTime{}).(time.Time); ok {
 		modelType := "machine"
@@ -364,9 +339,6 @@ func (s *ServerWorker) newTerminatingSSHServer(ctx ssh.Context, destination virt
 	}
 
 	server := &ssh.Server{
-		PublicKeyHandler: func(ctx ssh.Context, keyPresented ssh.PublicKey) bool {
-			return authenticator.publicKeyAuthentication(ctx, keyPresented)
-		},
 		ChannelHandlers: map[string]ssh.ChannelHandler{
 			"session":      ssh.DefaultSessionHandler,
 			"direct-tcpip": handlers.DirectTCPIPHandler(),
@@ -377,11 +349,6 @@ func (s *ServerWorker) newTerminatingSSHServer(ctx ssh.Context, destination virt
 		SubsystemHandlers: map[string]ssh.SubsystemHandler{
 			"sftp": handlers.SFTPHandler(),
 		},
-	}
-
-	if s.config.disableAuth {
-		server.PublicKeyHandler = nil
-		server.PasswordHandler = nil
 	}
 
 	return server, nil

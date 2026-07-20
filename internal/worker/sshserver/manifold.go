@@ -218,7 +218,6 @@ func (config ManifoldConfig) startWrapperWorker(ctx context.Context, getter depe
 		Authenticator: authenticator{
 			logger:        config.Logger,
 			jwtParser:     jwtParser,
-			keys:          routing,
 			tunnelTracker: tunnelTracker,
 			metrics:       metrics,
 		},
@@ -270,32 +269,6 @@ func (s routingService) domainServices(ctx context.Context, modelUUID model.UUID
 		return nil, errors.Trace(err)
 	}
 	return domainServices, nil
-}
-
-func (s routingService) AuthorizedKeys(ctx context.Context, destination virtualhostname.Info) ([]gossh.PublicKey, error) {
-	domainServices, err := s.domainServices(ctx, destination.ModelUUID())
-	if err != nil {
-		return nil, err
-	}
-	keysByUser, err := domainServices.KeyManager().GetAllUsersPublicKeys(ctx)
-	if err != nil {
-		return nil, errors.Trace(err)
-	}
-
-	keys := make([]gossh.PublicKey, 0)
-	for _, keyStrings := range keysByUser {
-		for _, keyString := range keyStrings {
-			key, _, _, _, err := gossh.ParseAuthorizedKey([]byte(keyString))
-			if err != nil {
-				return nil, errors.Annotate(err, "parsing model authorized key")
-			}
-			keys = append(keys, key)
-		}
-	}
-	if len(keys) == 0 {
-		return nil, errors.NotValidf("no authorized keys for model %q", destination.ModelUUID())
-	}
-	return keys, nil
 }
 
 // HasSSHAccess grants SSH access to model administrators and controller

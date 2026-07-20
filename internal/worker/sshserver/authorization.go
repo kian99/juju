@@ -18,12 +18,17 @@ type AccessService interface {
 	HasSSHAccess(context.Context, string, virtualhostname.Info) (bool, error)
 }
 
+// Authorizer checks whether an authenticated user may access a destination.
+type Authorizer interface {
+	Authorize(ssh.Context, virtualhostname.Info) bool
+}
+
 type authorizer struct {
 	access AccessService
 	logger Logger
 }
 
-func (a authorizer) authorize(ctx ssh.Context, destination virtualhostname.Info) bool {
+func (a authorizer) Authorize(ctx ssh.Context, destination virtualhostname.Info) bool {
 	publicKey, ok := ctx.Value(authenticatedViaPublicKey{}).(bool)
 	if !ok {
 		a.logger.Errorf(ctx, "SSH authentication method is missing from connection context")

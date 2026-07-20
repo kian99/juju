@@ -35,7 +35,7 @@ func (s *authorizationSuite) TestJWTModelAdminAccess(c *tc.C) {
 	}}
 
 	authorizer := authorizer{logger: loggertesting.WrapCheckLog(c)}
-	c.Check(authorizer.authorize(ctx, destination), tc.IsTrue)
+	c.Check(authorizer.Authorize(ctx, destination), tc.IsTrue)
 }
 
 func (s *authorizationSuite) TestPublicKeyAccessDelegatesToService(c *tc.C) {
@@ -47,7 +47,7 @@ func (s *authorizationSuite) TestPublicKeyAccessDelegatesToService(c *tc.C) {
 	}}
 
 	authorizer := authorizer{access: access, logger: loggertesting.WrapCheckLog(c)}
-	c.Check(authorizer.authorize(ctx, destination), tc.IsTrue)
+	c.Check(authorizer.Authorize(ctx, destination), tc.IsTrue)
 	c.Check(access.username, tc.Equals, "alice")
 	c.Check(access.destination, tc.Equals, destination)
 }
@@ -65,7 +65,7 @@ func (s *authorizationSuite) TestJWTAccessRejectsNonAdmin(c *tc.C) {
 		userJWT{}:                   token,
 	}}
 	authorizer := authorizer{logger: loggertesting.WrapCheckLog(c)}
-	c.Check(authorizer.authorize(ctx, destination), tc.IsFalse)
+	c.Check(authorizer.Authorize(ctx, destination), tc.IsFalse)
 }
 
 type stubAccessService struct {
