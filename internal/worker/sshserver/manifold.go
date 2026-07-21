@@ -194,7 +194,7 @@ func (config ManifoldConfig) startWrapperWorker(ctx context.Context, getter depe
 		return nil, errors.Trace(err)
 	}
 
-	routing := routingService{
+	routing := sshService{
 		controllerSSHHostKeyService: hostKeyService,
 		domainServicesGetter:        domainServicesGetter,
 		getSSHService:               config.GetSSHService,
@@ -238,24 +238,20 @@ func (config ManifoldConfig) startWrapperWorker(ctx context.Context, getter depe
 	}), nil
 }
 
-// routingService adapts domain services to the controller's routed SSH needs.
+// sshService adapts domain services to the ssh server needs.
 // It keeps controller host-key lookups controller-scoped and resolves all
 // target-specific operations through the model UUID in the virtual hostname.
-type routingService struct {
+type sshService struct {
 	controllerSSHHostKeyService ControllerSSHHostKeyService
 	domainServicesGetter        services.DomainServicesGetter
 	getSSHService               GetSSHServiceFunc
 }
 
-// sshService is retained as an alias for tests of the domain-service routing
-// adapter. New code should use routingService.
-type sshService = routingService
-
-func (s routingService) SSHServerHostKey(ctx context.Context) (string, error) {
+func (s sshService) SSHServerHostKey(ctx context.Context) (string, error) {
 	return s.controllerSSHHostKeyService.SSHServerHostKey(ctx)
 }
 
-func (s routingService) VirtualHostKey(ctx context.Context, info virtualhostname.Info) (string, error) {
+func (s sshService) VirtualHostKey(ctx context.Context, info virtualhostname.Info) (string, error) {
 	sshService, err := s.getSSHService(ctx, s.domainServicesGetter, info.ModelUUID())
 	if err != nil {
 		return "", errors.Trace(err)
@@ -263,7 +259,7 @@ func (s routingService) VirtualHostKey(ctx context.Context, info virtualhostname
 	return sshService.VirtualHostKey(ctx, info)
 }
 
-func (s routingService) domainServices(ctx context.Context, modelUUID model.UUID) (services.DomainServices, error) {
+func (s sshService) domainServices(ctx context.Context, modelUUID model.UUID) (services.DomainServices, error) {
 	domainServices, err := s.domainServicesGetter.ServicesForModel(ctx, modelUUID)
 	if err != nil {
 		return nil, errors.Trace(err)
@@ -274,7 +270,7 @@ func (s routingService) domainServices(ctx context.Context, modelUUID model.UUID
 // HasSSHAccess grants SSH access to model administrators and controller
 // superusers. A controller superuser need not hold an explicit grant to every
 // target model.
-func (s routingService) HasSSHAccess(ctx context.Context, username string, destination virtualhostname.Info) (bool, error) {
+func (s sshService) HasSSHAccess(ctx context.Context, username string, destination virtualhostname.Info) (bool, error) {
 	name, err := user.NewName(username)
 	if err != nil {
 		return false, errors.Trace(err)
@@ -315,7 +311,7 @@ func (s routingService) HasSSHAccess(ctx context.Context, username string, desti
 	return controllerAccess.EqualOrGreaterControllerAccessThan(permission.SuperuserAccess), nil
 }
 
-func (s routingService) ResolveK8sExecInfo(ctx context.Context, destination virtualhostname.Info) (string, string, error) {
+func (s sshService) ResolveK8sExecInfo(ctx context.Context, destination virtualhostname.Info) (string, string, error) {
 	domainServices, err := s.domainServices(ctx, destination.ModelUUID())
 	if err != nil {
 		return "", "", err
@@ -348,7 +344,7 @@ func (s routingService) ResolveK8sExecInfo(ctx context.Context, destination virt
 
 // MachineForDestination resolves an IAAS machine or machine-backed unit to the
 // machine name expected by the reverse tunnel tracker.
-func (s routingService) MachineForDestination(ctx context.Context, destination virtualhostname.Info) (coremachine.Name, error) {
+func (s sshService) MachineForDestination(ctx context.Context, destination virtualhostname.Info) (coremachine.Name, error) {
 	domainServices, err := s.domainServices(ctx, destination.ModelUUID())
 	if err != nil {
 		return "", err
@@ -399,7 +395,7 @@ func modelNamespace(ctx context.Context, domainServices services.DomainServices,
 type tunnelConnector struct {
 	tunnelTracker workerTunneler.TunnelTracker
 	controllerID  string
-	resolver      routingService
+	resolver      sshService
 }
 
 // Connect requests a one-shot reverse tunnel to the machine resolved from a
