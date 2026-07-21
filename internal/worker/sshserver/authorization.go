@@ -9,6 +9,7 @@ import (
 	"github.com/gliderlabs/ssh"
 	"github.com/lestrrat-go/jwx/v2/jwt"
 
+	"github.com/juju/juju/core/logger"
 	"github.com/juju/juju/core/permission"
 	"github.com/juju/juju/core/virtualhostname"
 )
@@ -18,16 +19,14 @@ type AccessService interface {
 	HasSSHAccess(context.Context, string, virtualhostname.Info) (bool, error)
 }
 
-// Authorizer checks whether an authenticated user may access a destination.
-type Authorizer interface {
-	Authorize(ssh.Context, virtualhostname.Info) bool
-}
-
 type authorizer struct {
 	access AccessService
-	logger Logger
+	logger logger.Logger
 }
 
+// Authorize checks if the SSH connection context is authorized to access the target destination.
+// By this point, we expect the authenticator to have set the authentication method and
+// any relevant claims in the context.
 func (a authorizer) Authorize(ctx ssh.Context, destination virtualhostname.Info) bool {
 	publicKey, ok := ctx.Value(authenticatedViaPublicKey{}).(bool)
 	if !ok {

@@ -7,7 +7,6 @@ import (
 	"context"
 	"testing"
 
-	"github.com/gliderlabs/ssh"
 	"github.com/juju/tc"
 	"github.com/lestrrat-go/jwx/v2/jwt"
 
@@ -38,7 +37,7 @@ func (s *authorizationSuite) TestJWTModelAdminAccess(c *tc.C) {
 	c.Check(authorizer.Authorize(ctx, destination), tc.IsTrue)
 }
 
-func (s *authorizationSuite) TestPublicKeyAccessDelegatesToService(c *tc.C) {
+func (s *authorizationSuite) TestPublicKeyAccessAllowed(c *tc.C) {
 	destination, err := virtualhostname.NewInfoMachineTarget("8419cd78-4993-4c3a-928e-c646226beeee", "0")
 	c.Assert(err, tc.ErrorIsNil)
 	access := &stubAccessService{allowed: true}
@@ -48,6 +47,20 @@ func (s *authorizationSuite) TestPublicKeyAccessDelegatesToService(c *tc.C) {
 
 	authorizer := authorizer{access: access, logger: loggertesting.WrapCheckLog(c)}
 	c.Check(authorizer.Authorize(ctx, destination), tc.IsTrue)
+	c.Check(access.username, tc.Equals, "alice")
+	c.Check(access.destination, tc.Equals, destination)
+}
+
+func (s *authorizationSuite) TestPublicKeyAccessDenied(c *tc.C) {
+	destination, err := virtualhostname.NewInfoMachineTarget("8419cd78-4993-4c3a-928e-c646226beeee", "0")
+	c.Assert(err, tc.ErrorIsNil)
+	access := &stubAccessService{allowed: false}
+	ctx := &authenticationContext{user: "alice", values: map[any]any{
+		authenticatedViaPublicKey{}: true,
+	}}
+
+	authorizer := authorizer{access: access, logger: loggertesting.WrapCheckLog(c)}
+	c.Check(authorizer.Authorize(ctx, destination), tc.IsFalse)
 	c.Check(access.username, tc.Equals, "alice")
 	c.Check(access.destination, tc.Equals, destination)
 }
@@ -79,5 +92,3 @@ func (s *stubAccessService) HasSSHAccess(_ context.Context, username string, des
 	s.destination = destination
 	return s.allowed, nil
 }
-
-var _ ssh.Context = (*authenticationContext)(nil)
