@@ -56,6 +56,56 @@ func (s *machineSuite) TestDirectTCPIPHandler(c *tc.C) {
 	c.Check(response, tc.DeepEquals, []byte("Hello world"))
 }
 
+func (s *machineSuite) TestDirectTCPIPHandlerPreservesHalfClose(c *tc.C) {
+	destination, err := virtualhostname.NewInfoMachineTarget("8419cd78-4993-4c3a-928e-c646226beeee", "0")
+	c.Assert(err, tc.ErrorIsNil)
+
+	machine := startSSHTestServer(c, &ssh.Server{ChannelHandlers: map[string]ssh.ChannelHandler{
+		"direct-tcpip": func(_ *ssh.Server, _ *gossh.ServerConn, channel gossh.NewChannel, _ ssh.Context) {
+			connection, requests, err := channel.Accept()
+			if err != nil {
+				return
+			}
+			defer connection.Close()
+			go gossh.DiscardRequests(requests)
+
+			request, err := io.ReadAll(connection)
+			if err != nil {
+				return
+			}
+			_, _ = connection.Write(append([]byte("response: "), request...))
+		},
+	}})
+
+	handlers, err := NewHandlers(destination, connectorForServer(machine), loggertesting.WrapCheckLog(c))
+	c.Assert(err, tc.ErrorIsNil)
+
+	controller := startSSHTestServer(c, &ssh.Server{
+		LocalPortForwardingCallback: func(ssh.Context, string, uint32) bool { return true },
+		ChannelHandlers: map[string]ssh.ChannelHandler{
+			"direct-tcpip": handlers.DirectTCPIPHandler(),
+		},
+	})
+
+	client, err := controller.client()
+	c.Assert(err, tc.ErrorIsNil)
+	defer client.Close()
+
+	connection, err := client.Dial("tcp", "localhost:8080")
+	c.Assert(err, tc.ErrorIsNil)
+	defer connection.Close()
+
+	_, err = connection.Write([]byte("request"))
+	c.Assert(err, tc.ErrorIsNil)
+	closeWriter, ok := connection.(interface{ CloseWrite() error })
+	c.Assert(ok, tc.IsTrue)
+	c.Assert(closeWriter.CloseWrite(), tc.ErrorIsNil)
+
+	response, err := io.ReadAll(connection)
+	c.Check(err, tc.ErrorIsNil)
+	c.Check(response, tc.DeepEquals, []byte("response: request"))
+}
+
 func (s *machineSuite) TestDirectTCPIPHandlerReportsConnectionFailure(c *tc.C) {
 	destination, err := virtualhostname.NewInfoMachineTarget("8419cd78-4993-4c3a-928e-c646226beeee", "0")
 	c.Assert(err, tc.ErrorIsNil)

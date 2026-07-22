@@ -95,7 +95,8 @@ func (s *k8sSuite) TestSessionHandlerWithPTY(c *tc.C) {
 	}), loggertesting.WrapCheckLog(c), func(string) (k8sexec.Executor, error) {
 		return executorFunc(func(_ context.Context, params k8sexec.ExecParams, _ <-chan struct{}) error {
 			executed <- params
-			return nil
+			_, err := io.WriteString(params.Stdout, "final output\n")
+			return err
 		}), nil
 	})
 	c.Assert(err, tc.ErrorIsNil)
@@ -109,13 +110,13 @@ func (s *k8sSuite) TestSessionHandlerWithPTY(c *tc.C) {
 	session, err := client.NewSession()
 	c.Assert(err, tc.ErrorIsNil)
 	defer session.Close()
+	var stdout bytes.Buffer
+	session.Stdout = &stdout
 
 	c.Assert(session.RequestPty("xterm", 80, 24, nil), tc.ErrorIsNil)
-	c.Assert(session.Shell(), tc.ErrorIsNil)
+	c.Assert(session.Run("echo hello"), tc.ErrorIsNil)
 
 	params := <-executed
-
-	c.Assert(session.Close(), tc.ErrorIsNil)
-	_ = session.Wait()
 	c.Check(params.TTY, tc.IsTrue)
+	c.Check(stdout.String(), tc.Equals, "final output\r\n")
 }

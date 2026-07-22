@@ -4,6 +4,8 @@
 package machine
 
 import (
+	"context"
+
 	"github.com/gliderlabs/ssh"
 	"github.com/juju/errors"
 	gossh "golang.org/x/crypto/ssh"
@@ -23,6 +25,10 @@ func (h *Handlers) SessionHandler(session ssh.Session) {
 		return
 	}
 	defer client.Close()
+	stop := context.AfterFunc(session.Context(), func() {
+		_ = client.Close()
+	})
+	defer stop()
 
 	machineSession, err := client.NewSession()
 	if err != nil {
@@ -65,8 +71,16 @@ func setupShellOrCommand(userSession ssh.Session, machineSession *gossh.Session)
 	}
 
 	go func() {
-		for window := range windowChanges {
-			_ = machineSession.WindowChange(window.Height, window.Width)
+		for {
+			select {
+			case <-userSession.Context().Done():
+				return
+			case window, ok := <-windowChanges:
+				if !ok {
+					return
+				}
+				_ = machineSession.WindowChange(window.Height, window.Width)
+			}
 		}
 	}()
 	return nil

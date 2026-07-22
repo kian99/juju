@@ -4,6 +4,7 @@
 package machine
 
 import (
+	"context"
 	"io"
 	"sync"
 
@@ -36,6 +37,10 @@ func (h *Handlers) SFTPHandler() ssh.SubsystemHandler {
 			return
 		}
 		defer machineChannel.Close()
+		stop := context.AfterFunc(session.Context(), func() {
+			_ = machineChannel.Close()
+		})
+		defer stop()
 
 		// This routine is cleaned up when machineRequests channel closes
 		// which occurs when machineChannel is closed.
@@ -48,18 +53,17 @@ func (h *Handlers) SFTPHandler() ssh.SubsystemHandler {
 
 		var wg sync.WaitGroup
 
-		// Note that we don't run `session.Close()` in the routines
-		// where we run `io.Copy()` intentionally. The routine copying
-		// *from* session will return once the session is closed.
-		// Closing session is handled by `proxyRequests` in order to
-		// propagate the exit code back to the client.
+		// Note that we don't run `session.Close()` below.
+		// The routine copying *from* session will return once the
+		// session is closed. Closing session is handled by
+		// `proxyRequests` in order to propagate the exit code
+		// back to the client.
 
 		wg.Go(func() {
-			defer machineChannel.Close()
+			defer machineChannel.CloseWrite()
 			_, _ = io.Copy(machineChannel, session)
 		})
 		wg.Go(func() {
-			defer machineChannel.Close()
 			_, _ = io.Copy(session, machineChannel)
 		})
 		wg.Wait()

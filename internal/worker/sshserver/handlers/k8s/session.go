@@ -6,7 +6,6 @@ package k8s
 import (
 	"io"
 	"os"
-	"sync"
 
 	"github.com/creack/pty"
 	"github.com/gliderlabs/ssh"
@@ -39,7 +38,7 @@ func (h *Handlers) SessionHandler(session ssh.Session) {
 	var stdin io.Reader = session
 	var stdout, stderr io.Writer = session, session.Stderr()
 	var ptmx, tty *os.File
-	var wg sync.WaitGroup
+	var ptySucceeded bool
 	// cleanupPTY waits for the PTY goroutines to finish and then closes
 	// the PTY file descriptors. It is a no-op when no PTY was requested.
 	cleanupPTY := func() {}
@@ -59,38 +58,46 @@ func (h *Handlers) SessionHandler(session ssh.Session) {
 			handleError(errors.Annotate(err, "opening pseudo-terminal"))
 			return
 		}
-		// ptmx and tty are closed by cleanupPTY, which waits for the
-		// goroutines below to finish first so that pty.Setsize never
-		// races with ptmx.Close.
-		cleanupPTY = func() {
-			// Wait for the copy goroutines and the window-change
-			// listener to finish before closing ptmx, so no goroutine
-			// is left calling pty.Setsize on a closed file descriptor.
-			wg.Wait()
-			_ = tty.Close()
-			// Send a new line to the session to end the master
-			// side of the pty.
-			_, _ = ptmx.WriteString("\n")
-			_ = ptmx.Close()
-		}
-
+		stopWindowChanges := make(chan struct{})
+		windowChangesDone := make(chan struct{})
+		inputDone := make(chan struct{})
+		outputDone := make(chan struct{})
 		if err := pty.Setsize(ptmx, &pty.Winsize{
 			Rows: uint16(ptyRequest.Window.Height),
 			Cols: uint16(ptyRequest.Window.Width),
 		}); err != nil {
+			_ = tty.Close()
+			_ = ptmx.Close()
 			handleError(errors.Annotate(err, "setting pseudo-terminal size"))
 			return
 		}
-
+		// Closing the slave side first unblocks the output copier. It drains
+		// the PTY before the session is closed, preserving final output.
+		cleanupPTY = func() {
+			close(stopWindowChanges)
+			_ = tty.Close()
+			<-outputDone
+			if ptySucceeded {
+				_ = session.Exit(0)
+			} else {
+				_ = session.Close()
+			}
+			<-inputDone
+			<-windowChangesDone
+			_ = ptmx.Close()
+		}
 		// Listen for window size changes. The listener stops when the
 		// session context is cancelled (which happens when the session
 		// is closed) or when the windowChanges channel is closed.
-		// cleanupPTY waits for this goroutine via wg.Wait() before
-		// closing ptmx, so pty.Setsize never races with ptmx.Close.
-		wg.Go(func() {
+		// cleanupPTY waits for this goroutine before closing ptmx, so
+		// pty.Setsize never races with ptmx.Close.
+		go func() {
+			defer close(windowChangesDone)
 			ctx := session.Context()
 			for {
 				select {
+				case <-stopWindowChanges:
+					return
 				case <-ctx.Done():
 					return
 				case window, ok := <-windowChanges:
@@ -103,21 +110,15 @@ func (h *Handlers) SessionHandler(session ssh.Session) {
 					})
 				}
 			}
-		})
-		wg.Go(func() {
-			// If the user's session ends, close the tty so the
-			// ptmx-to-session copy below unblocks and the session is
-			// closed. ptmx itself is closed by cleanupPTY after
-			// wg.Wait() to avoid racing with the window-change listener.
-			defer tty.Close()
+		}()
+		go func() {
+			defer close(inputDone)
 			_, _ = io.Copy(ptmx, session)
-		})
-		wg.Go(func() {
-			// If the ptmx ends, close the session because
-			// there is no more data to send.
-			defer session.Close()
+		}()
+		go func() {
+			defer close(outputDone)
 			_, _ = io.Copy(session, ptmx)
-		})
+		}()
 		stdin, stdout, stderr = tty, tty, tty
 	}
 
@@ -135,4 +136,5 @@ func (h *Handlers) SessionHandler(session ssh.Session) {
 		handleError(errors.Annotate(err, "executing command in Kubernetes pod"))
 		return
 	}
+	ptySucceeded = true
 }

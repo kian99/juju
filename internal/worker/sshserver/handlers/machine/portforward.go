@@ -4,10 +4,12 @@
 package machine
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"net"
 	"strconv"
+	"sync"
 
 	"github.com/gliderlabs/ssh"
 	gossh "golang.org/x/crypto/ssh"
@@ -18,6 +20,11 @@ type localForwardChannelData struct {
 	DestPort   uint32
 	OriginAddr string
 	OriginPort uint32
+}
+
+type halfCloseConn interface {
+	net.Conn
+	CloseWrite() error
 }
 
 // DirectTCPIPHandler returns a handler for the DirectTCPIP channel type.
@@ -45,19 +52,43 @@ func (h *Handlers) DirectTCPIPHandler() ssh.ChannelHandler {
 			_ = newChan.Reject(gossh.ConnectionFailed, fmt.Sprintf("dialling target: %v", err))
 			return
 		}
+		halfCloseConnection, ok := connection.(halfCloseConn)
+		if !ok {
+			_ = connection.Close()
+			_ = newChan.Reject(gossh.ConnectionFailed, "target connection does not support half-close")
+			return
+		}
 
 		channel, requests, err := newChan.Accept()
 		if err != nil {
 			_ = connection.Close()
 			return
 		}
+		defer channel.Close()
+		defer halfCloseConnection.Close()
+
+		// AfterFunc runs the closure when the context is cancelled,
+		// and stop will stop the closure from running if possible.
+		stop := context.AfterFunc(ctx, func() {
+			_ = channel.Close()
+			_ = halfCloseConnection.Close()
+		})
+		defer stop()
+
 		go gossh.DiscardRequests(requests)
-		go proxy(channel, connection)
-		go proxy(connection, channel)
+		proxy(channel, halfCloseConnection)
 	}
 }
 
-func proxy(dst io.WriteCloser, src io.Reader) {
-	defer dst.Close()
-	_, _ = io.Copy(dst, src)
+func proxy(channel gossh.Channel, connection halfCloseConn) {
+	var wg sync.WaitGroup
+	wg.Go(func() {
+		_, _ = io.Copy(channel, connection)
+		_ = channel.CloseWrite()
+	})
+	wg.Go(func() {
+		_, _ = io.Copy(connection, channel)
+		_ = connection.CloseWrite()
+	})
+	wg.Wait()
 }
