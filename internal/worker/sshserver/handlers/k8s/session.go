@@ -4,8 +4,10 @@
 package k8s
 
 import (
+	"context"
 	"io"
 	"os"
+	"sync"
 
 	"github.com/creack/pty"
 	"github.com/gliderlabs/ssh"
@@ -37,89 +39,18 @@ func (h *Handlers) SessionHandler(session ssh.Session) {
 
 	var stdin io.Reader = session
 	var stdout, stderr io.Writer = session, session.Stderr()
-	var ptmx, tty *os.File
-	var ptySucceeded bool
-	// cleanupPTY waits for the PTY goroutines to finish and then closes
-	// the PTY file descriptors. It is a no-op when no PTY was requested.
-	cleanupPTY := func() {}
-	// Defer eval of cleanupPTY since it may be set later.
-	defer func() {
-		cleanupPTY()
-	}()
 
-	// If pty is requested we need to simulate a terminal device, passing
-	// the pty file descriptor to the executor and pipe it back to the session.
-	// NOTE: It's unclear if this is strictly needed but the bare session is not enough
-	// because the file descriptor is not a tty and when the executor checks for
-	// it, it returns an error.
+	// A PTY request needs a real terminal descriptor. The SSH session streams
+	// alone do not satisfy terminal detection performed by the executor.
+	var proxy *ptyProxy
 	if hasPTY {
-		ptmx, tty, err = pty.Open()
+		proxy, err = newPTYProxy(session, ptyRequest, windowChanges)
 		if err != nil {
-			handleError(errors.Annotate(err, "opening pseudo-terminal"))
+			handleError(err)
 			return
 		}
-		stopWindowChanges := make(chan struct{})
-		windowChangesDone := make(chan struct{})
-		inputDone := make(chan struct{})
-		outputDone := make(chan struct{})
-		if err := pty.Setsize(ptmx, &pty.Winsize{
-			Rows: uint16(ptyRequest.Window.Height),
-			Cols: uint16(ptyRequest.Window.Width),
-		}); err != nil {
-			_ = tty.Close()
-			_ = ptmx.Close()
-			handleError(errors.Annotate(err, "setting pseudo-terminal size"))
-			return
-		}
-		// Closing the slave side first unblocks the output copier. It drains
-		// the PTY before the session is closed, preserving final output.
-		cleanupPTY = func() {
-			close(stopWindowChanges)
-			_ = tty.Close()
-			<-outputDone
-			if ptySucceeded {
-				_ = session.Exit(0)
-			} else {
-				_ = session.Close()
-			}
-			<-inputDone
-			<-windowChangesDone
-			_ = ptmx.Close()
-		}
-		// Listen for window size changes. The listener stops when the
-		// session context is cancelled (which happens when the session
-		// is closed) or when the windowChanges channel is closed.
-		// cleanupPTY waits for this goroutine before closing ptmx, so
-		// pty.Setsize never races with ptmx.Close.
-		go func() {
-			defer close(windowChangesDone)
-			ctx := session.Context()
-			for {
-				select {
-				case <-stopWindowChanges:
-					return
-				case <-ctx.Done():
-					return
-				case window, ok := <-windowChanges:
-					if !ok {
-						return
-					}
-					_ = pty.Setsize(ptmx, &pty.Winsize{
-						Rows: uint16(window.Height),
-						Cols: uint16(window.Width),
-					})
-				}
-			}
-		}()
-		go func() {
-			defer close(inputDone)
-			_, _ = io.Copy(ptmx, session)
-		}()
-		go func() {
-			defer close(outputDone)
-			_, _ = io.Copy(session, ptmx)
-		}()
-		stdin, stdout, stderr = tty, tty, tty
+		defer proxy.Close()
+		stdin, stdout, stderr = proxy.Streams()
 	}
 
 	err = executor.Exec(session.Context(), k8sexec.ExecParams{
@@ -136,5 +67,111 @@ func (h *Handlers) SessionHandler(session ssh.Session) {
 		handleError(errors.Annotate(err, "executing command in Kubernetes pod"))
 		return
 	}
-	ptySucceeded = true
+	if proxy != nil {
+		proxy.Succeed()
+	}
+}
+
+// ptyProxy owns a pseudo-terminal and the goroutines that copy data and resize
+// it for an SSH session.
+type ptyProxy struct {
+	session ssh.Session
+	ptmx    *os.File
+	tty     *os.File
+
+	cancel     context.CancelFunc
+	resizeDone chan struct{}
+	outputDone chan struct{}
+	background sync.WaitGroup
+	succeeded  bool
+}
+
+func newPTYProxy(session ssh.Session, request ssh.Pty, windowChanges <-chan ssh.Window) (*ptyProxy, error) {
+	ptmx, tty, err := pty.Open()
+	if err != nil {
+		return nil, errors.Annotate(err, "opening pseudo-terminal")
+	}
+	if err := pty.Setsize(ptmx, &pty.Winsize{
+		Rows: uint16(request.Window.Height),
+		Cols: uint16(request.Window.Width),
+	}); err != nil {
+		_ = tty.Close()
+		_ = ptmx.Close()
+		return nil, errors.Annotate(err, "setting pseudo-terminal size")
+	}
+
+	ctx, cancel := context.WithCancel(session.Context())
+	proxy := &ptyProxy{
+		session:    session,
+		ptmx:       ptmx,
+		tty:        tty,
+		cancel:     cancel,
+		resizeDone: make(chan struct{}),
+		outputDone: make(chan struct{}),
+	}
+	proxy.start(ctx, windowChanges)
+	return proxy, nil
+}
+
+// Streams returns the terminal streams to pass to the Kubernetes executor.
+func (p *ptyProxy) Streams() (io.Reader, io.Writer, io.Writer) {
+	return p.tty, p.tty, p.tty
+}
+
+// Succeed records that the command completed successfully.
+func (p *ptyProxy) Succeed() {
+	p.succeeded = true
+}
+
+// Close drains final command output, closes the SSH session with the
+// appropriate status, and waits for all proxy goroutines to stop.
+func (p *ptyProxy) Close() {
+	// Stop resizing before closing descriptors so Setsize cannot race with
+	// File.Close.
+	p.cancel()
+	<-p.resizeDone
+
+	// Closing the slave signals command completion. Keep the master open until
+	// its copier has drained any final command output to the SSH client.
+	_ = p.tty.Close()
+	<-p.outputDone
+
+	// Exit sends the successful status and closes the SSH channel. On failure,
+	// SessionHandler has already sent status 1, so only a close is needed here.
+	if p.succeeded {
+		_ = p.session.Exit(0)
+	} else {
+		_ = p.session.Close()
+	}
+	_ = p.ptmx.Close()
+	p.background.Wait()
+}
+
+func (p *ptyProxy) start(ctx context.Context, windowChanges <-chan ssh.Window) {
+	p.background.Go(func() {
+		defer close(p.resizeDone)
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case window, ok := <-windowChanges:
+				if !ok {
+					return
+				}
+				_ = pty.Setsize(p.ptmx, &pty.Winsize{
+					Rows: uint16(window.Height),
+					Cols: uint16(window.Width),
+				})
+			}
+		}
+	})
+	p.background.Go(func() {
+		// Closing the SSH session or master descriptor interrupts this copy.
+		_, _ = io.Copy(p.ptmx, p.session)
+	})
+	p.background.Go(func() {
+		// outputDone lets Close drain output before closing the SSH session.
+		defer close(p.outputDone)
+		_, _ = io.Copy(p.session, p.ptmx)
+	})
 }
