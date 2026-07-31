@@ -69,10 +69,6 @@ func (h *Handlers) DirectTCPIPHandler() ssh.ChannelHandler {
 				defer channel.Close()
 
 				accepted = true
-				stop := context.AfterFunc(ctx, func() {
-					_ = channel.Close()
-				})
-				defer stop()
 
 				go gossh.DiscardRequests(requests)
 				proxyStreams(channel, remote)
