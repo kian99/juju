@@ -24,8 +24,6 @@ type ProxyHandlers interface {
 	SessionHandler(ssh.Session)
 	// DirectTCPIPHandler returns a handler for proxying SSH local forwarding requests.
 	DirectTCPIPHandler() ssh.ChannelHandler
-	// SFTPHandler returns a handler for proxying SFTP requests.
-	SFTPHandler() ssh.SubsystemHandler
 }
 
 // ProxyFactory creates handlers for an SSH target.

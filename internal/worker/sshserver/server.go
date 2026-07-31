@@ -366,9 +366,6 @@ func (s *ServerWorker) newTerminatingSSHServer(_ ssh.Context, destination virtua
 			"direct-tcpip": handlers.DirectTCPIPHandler(),
 		},
 		Handler: handlers.SessionHandler,
-		SubsystemHandlers: map[string]ssh.SubsystemHandler{
-			"sftp": handlers.SFTPHandler(),
-		},
 	}
 
 	return server, nil

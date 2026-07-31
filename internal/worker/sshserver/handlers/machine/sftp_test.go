@@ -7,6 +7,7 @@ import (
 	"io"
 
 	"github.com/gliderlabs/ssh"
+	"github.com/juju/errors"
 	"github.com/juju/tc"
 	"github.com/pkg/sftp"
 	gossh "golang.org/x/crypto/ssh"
@@ -192,4 +193,18 @@ func (s *machineSuite) TestSFTPHandlerClosesMachineClientWhenClientDisconnects(c
 	case <-c.Context().Done():
 		c.Fatal("machine SFTP session was not closed after client disconnect")
 	}
+}
+
+type subsystemRequest struct {
+	Subsystem string
+}
+
+// requestSubsystem requests the association of a subsystem with the session on the remote host.
+// A subsystem is a predefined command that runs in the background when the ssh session is initiated
+func requestSubsystem(channel gossh.Channel, subsystem string) error {
+	ok, err := channel.SendRequest("subsystem", true, gossh.Marshal(&subsystemRequest{Subsystem: subsystem}))
+	if err == nil && !ok {
+		return errors.New("ssh: subsystem request failed")
+	}
+	return err
 }
