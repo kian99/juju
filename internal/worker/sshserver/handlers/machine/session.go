@@ -107,11 +107,27 @@ func proxySession(local gossh.Channel, localRequests <-chan *gossh.Request, remo
 	// These drain once the target has finished and closed its channel, at which
 	// point everything the client needs to see has been written to local.
 	var remoteToLocal sync.WaitGroup
+
+	// Copy stdout and stderr, then propagate the target's data EOF to the client
+	// as a half close so a client that only half-closes (e.g. sftp, or any
+	// streaming client that waits for EOF before the channel is fully torn down)
+	// observes EOF promptly. The half close happens only after both data copies
+	// have finished: gossh's channel.CloseWrite writes the channel's sentEOF
+	// flag without holding the write lock, so it must not run concurrently with
+	// a Write to the same channel (including its stderr stream). This is a
+	// CloseWrite, not a full Close, so it does not interfere with the
+	// exit-status/exec-reply ordering guaranteed by the full Close during
+	// teardown below.
 	remoteToLocal.Go(func() {
-		_, _ = io.Copy(local, remote)
-	})
-	remoteToLocal.Go(func() {
-		_, _ = io.Copy(local.Stderr(), remote.Stderr())
+		var data sync.WaitGroup
+		data.Go(func() {
+			_, _ = io.Copy(local, remote)
+		})
+		data.Go(func() {
+			_, _ = io.Copy(local.Stderr(), remote.Stderr())
+		})
+		data.Wait()
+		closeWrite(local)
 	})
 	remoteToLocal.Go(func() {
 		// Replies to remote requests are written to the remote channel, not the

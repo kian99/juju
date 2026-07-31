@@ -31,8 +31,8 @@ func (s *machineSuite) TestSFTPHandler(c *tc.C) {
 	handlers, err := NewHandlers(destination, connectorForServer(machine), loggertesting.WrapCheckLog(c))
 	c.Assert(err, tc.ErrorIsNil)
 
-	controller := startSSHTestServer(c, &ssh.Server{SubsystemHandlers: map[string]ssh.SubsystemHandler{
-		"sftp": handlers.SFTPHandler(),
+	controller := startSSHTestServer(c, &ssh.Server{ChannelHandlers: map[string]ssh.ChannelHandler{
+		"session": handlers.SessionChannelHandler(),
 	}})
 
 	client, err := controller.client()
@@ -71,8 +71,8 @@ func (s *machineSuite) TestSFTPHandlerProxiesExitStatus(c *tc.C) {
 	handlers, err := NewHandlers(destination, connectorForServer(machine), loggertesting.WrapCheckLog(c))
 	c.Assert(err, tc.ErrorIsNil)
 
-	controller := startSSHTestServer(c, &ssh.Server{SubsystemHandlers: map[string]ssh.SubsystemHandler{
-		"sftp": handlers.SFTPHandler(),
+	controller := startSSHTestServer(c, &ssh.Server{ChannelHandlers: map[string]ssh.ChannelHandler{
+		"session": handlers.SessionChannelHandler(),
 	}})
 
 	client, err := controller.client()
@@ -124,8 +124,8 @@ func (s *machineSuite) TestSFTPHandlerProxiesMachineEOF(c *tc.C) {
 	handlers, err := NewHandlers(destination, connectorForServer(machine), loggertesting.WrapCheckLog(c))
 	c.Assert(err, tc.ErrorIsNil)
 
-	controller := startSSHTestServer(c, &ssh.Server{SubsystemHandlers: map[string]ssh.SubsystemHandler{
-		"sftp": handlers.SFTPHandler(),
+	controller := startSSHTestServer(c, &ssh.Server{ChannelHandlers: map[string]ssh.ChannelHandler{
+		"session": handlers.SessionChannelHandler(),
 	}})
 
 	client, err := controller.client()
@@ -168,8 +168,8 @@ func (s *machineSuite) TestSFTPHandlerClosesMachineClientWhenClientDisconnects(c
 	handlers, err := NewHandlers(destination, connectorForServer(machine), loggertesting.WrapCheckLog(c))
 	c.Assert(err, tc.ErrorIsNil)
 
-	controller := startSSHTestServer(c, &ssh.Server{SubsystemHandlers: map[string]ssh.SubsystemHandler{
-		"sftp": handlers.SFTPHandler(),
+	controller := startSSHTestServer(c, &ssh.Server{ChannelHandlers: map[string]ssh.ChannelHandler{
+		"session": handlers.SessionChannelHandler(),
 	}})
 
 	client, err := controller.client()
