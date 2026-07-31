@@ -35,6 +35,13 @@ type sessionProxy struct {
 	session ssh.Session
 }
 
+// SessionChannelHandler adapts the raw session channel to Gliderlabs' session
+// handler. Kubernetes execution needs the parsed session values, unlike the
+// machine proxy which forwards the channel requests unchanged.
+func (h *Handlers) SessionChannelHandler() ssh.ChannelHandler {
+	return ssh.DefaultSessionHandler
+}
+
 func (p sessionProxy) Streams() (io.Reader, io.Writer, io.Writer) {
 	return p.session, p.session, p.session.Stderr()
 }

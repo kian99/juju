@@ -362,12 +362,10 @@ func (s *ServerWorker) newTerminatingSSHServer(_ ssh.Context, destination virtua
 
 	server := &ssh.Server{
 		ChannelHandlers: map[string]ssh.ChannelHandler{
-			"session":      ssh.DefaultSessionHandler,
+			"session":      handlers.SessionChannelHandler(),
 			"direct-tcpip": handlers.DirectTCPIPHandler(),
 		},
-		Handler: func(session ssh.Session) {
-			handlers.SessionHandler(session)
-		},
+		Handler: handlers.SessionHandler,
 		SubsystemHandlers: map[string]ssh.SubsystemHandler{
 			"sftp": handlers.SFTPHandler(),
 		},

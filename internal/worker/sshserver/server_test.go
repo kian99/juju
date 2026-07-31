@@ -158,13 +158,13 @@ func (s *sshServerSuite) testSSHServerSession(c *tc.C, auth gossh.AuthMethod, us
 	// Authorize the user and setup the proxy factory and handlers.
 	s.authorizer.EXPECT().Authorize(gomock.Any(), destination).Return(true, nil)
 	s.proxyFactory.EXPECT().New(destination).Return(s.proxyHandlers, nil)
-	s.proxyHandlers.EXPECT().DirectTCPIPHandler().Return(rejectDirectTCPIP)
-	s.proxyHandlers.EXPECT().SFTPHandler().Return(rejectSFTP)
-
 	sessionOutput := fmt.Sprintf("Your final destination is: %s\n", testVirtualHostname)
+	s.proxyHandlers.EXPECT().SessionChannelHandler().Return(ssh.DefaultSessionHandler)
 	s.proxyHandlers.EXPECT().SessionHandler(gomock.Any()).Do(func(session ssh.Session) {
 		_, _ = session.Write([]byte(sessionOutput))
 	})
+	s.proxyHandlers.EXPECT().DirectTCPIPHandler().Return(rejectDirectTCPIP)
+	s.proxyHandlers.EXPECT().SFTPHandler().Return(rejectSFTP)
 
 	_, listener, cleanup := s.newServer(c)
 	defer cleanup()
@@ -175,7 +175,7 @@ func (s *sshServerSuite) testSSHServerSession(c *tc.C, auth gossh.AuthMethod, us
 	terminatingSession.Stdout = &output
 	err = terminatingSession.Run("")
 	c.Assert(err, tc.ErrorIsNil)
-	c.Check(output.String(), tc.Equals, fmt.Sprintf("Your final destination is: %s\n", testVirtualHostname))
+	c.Check(output.String(), tc.Equals, sessionOutput)
 }
 
 func newServerWorkerConfig(

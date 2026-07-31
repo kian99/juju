@@ -15,6 +15,7 @@ import (
 
 	gomock "github.com/canonical/gomock/gomock"
 	ssh "github.com/gliderlabs/ssh"
+
 	controller "github.com/juju/juju/controller"
 	virtualhostname "github.com/juju/juju/core/virtualhostname"
 	watcher "github.com/juju/juju/core/watcher"
@@ -239,10 +240,11 @@ type MockProxyHandlers struct {
 
 // MockProxyHandlersMockRecorder is the mock recorder for MockProxyHandlers.
 type MockProxyHandlersMockRecorder struct {
-	mock                      *MockProxyHandlers
-	directTCPIPHandlerExpects []*gomock.Call0_1[ssh.ChannelHandler]
-	sFTPHandlerExpects        []*gomock.Call0_1[ssh.SubsystemHandler]
-	sessionHandlerExpects     []*gomock.Call1_0[ssh.Session]
+	mock                         *MockProxyHandlers
+	directTCPIPHandlerExpects    []*gomock.Call0_1[ssh.ChannelHandler]
+	sFTPHandlerExpects           []*gomock.Call0_1[ssh.SubsystemHandler]
+	sessionChannelHandlerExpects []*gomock.Call0_1[ssh.ChannelHandler]
+	sessionHandlerExpects        []*gomock.Call1_0[ssh.Session]
 }
 
 // NewMockProxyHandlers creates a new mock instance.
@@ -292,6 +294,24 @@ func (mr *MockProxyHandlersMockRecorder) SFTPHandler() *MockProxyHandlersSFTPHan
 
 // MockProxyHandlersSFTPHandlerCall is the typed call wrapper for SFTPHandler.
 type MockProxyHandlersSFTPHandlerCall = gomock.Call0_1[ssh.SubsystemHandler]
+
+// SessionChannelHandler mocks base method.
+func (m *MockProxyHandlers) SessionChannelHandler() ssh.ChannelHandler {
+	m.ctrl.T.Helper()
+	return gomock.Dispatch0_1(&m.recorder.sessionChannelHandlerExpects, m.ctrl, m, "SessionChannelHandler")
+}
+
+// SessionChannelHandler indicates an expected call of SessionChannelHandler.
+func (mr *MockProxyHandlersMockRecorder) SessionChannelHandler() *MockProxyHandlersSessionChannelHandlerCall {
+	mr.mock.ctrl.T.Helper()
+	call := gomock.NewCall0_1[ssh.ChannelHandler](mr.mock.ctrl.T, mr.mock, "SessionChannelHandler")
+	mr.sessionChannelHandlerExpects = append(mr.sessionChannelHandlerExpects, call)
+	mr.mock.ctrl.Track(call.Call)
+	return call
+}
+
+// MockProxyHandlersSessionChannelHandlerCall is the typed call wrapper for SessionChannelHandler.
+type MockProxyHandlersSessionChannelHandlerCall = gomock.Call0_1[ssh.ChannelHandler]
 
 // SessionHandler mocks base method.
 func (m *MockProxyHandlers) SessionHandler(arg0 ssh.Session) {

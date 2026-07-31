@@ -30,7 +30,9 @@ func (s *machineSuite) TestSessionHandlerProxiesCommand(c *tc.C) {
 	handlers, err := NewHandlers(destination, connectorForServer(machine), loggertesting.WrapCheckLog(c))
 	c.Assert(err, tc.ErrorIsNil)
 
-	controller := startSSHTestServer(c, &ssh.Server{Handler: handlers.SessionHandler})
+	controller := startSSHTestServer(c, &ssh.Server{ChannelHandlers: map[string]ssh.ChannelHandler{
+		"session": handlers.SessionChannelHandler(),
+	}})
 
 	client, err := controller.client()
 	c.Assert(err, tc.ErrorIsNil)
@@ -63,7 +65,9 @@ func (s *machineSuite) TestSessionHandlerPropagatesCommandExitCode(c *tc.C) {
 	handlers, err := NewHandlers(destination, connectorForServer(machine), loggertesting.WrapCheckLog(c))
 	c.Assert(err, tc.ErrorIsNil)
 
-	controller := startSSHTestServer(c, &ssh.Server{Handler: handlers.SessionHandler})
+	controller := startSSHTestServer(c, &ssh.Server{ChannelHandlers: map[string]ssh.ChannelHandler{
+		"session": handlers.SessionChannelHandler(),
+	}})
 
 	client, err := controller.client()
 	c.Assert(err, tc.ErrorIsNil)
@@ -79,6 +83,55 @@ func (s *machineSuite) TestSessionHandlerPropagatesCommandExitCode(c *tc.C) {
 	c.Check(exitErr.ExitStatus(), tc.Equals, 3)
 }
 
+func (s *machineSuite) TestSessionHandlerProxiesMachineRequests(c *tc.C) {
+	destination, err := virtualhostname.NewInfoMachineTarget("8419cd78-4993-4c3a-928e-c646226beeee", "0")
+	c.Assert(err, tc.ErrorIsNil)
+
+	machine := startSSHTestServer(c, &ssh.Server{Handler: func(session ssh.Session) {
+		_, err := session.SendRequest("test-request", false, []byte("test payload"))
+		c.Check(err, tc.ErrorIsNil)
+	}})
+
+	handlers, err := NewHandlers(destination, connectorForServer(machine), loggertesting.WrapCheckLog(c))
+	c.Assert(err, tc.ErrorIsNil)
+
+	controller := startSSHTestServer(c, &ssh.Server{ChannelHandlers: map[string]ssh.ChannelHandler{
+		"session": handlers.SessionChannelHandler(),
+	}})
+
+	client, err := controller.client()
+	c.Assert(err, tc.ErrorIsNil)
+	defer client.Close()
+
+	channel, requests, err := client.OpenChannel("session", nil)
+	c.Assert(err, tc.ErrorIsNil)
+	defer channel.Close()
+
+	request := make(chan *gossh.Request, 1)
+	go func() {
+		for req := range requests {
+			if req.Type == "test-request" {
+				request <- req
+				return
+			}
+			if req.WantReply {
+				_ = req.Reply(false, nil)
+			}
+		}
+	}()
+
+	ok, err := channel.SendRequest("exec", true, gossh.Marshal(&struct{ Command string }{"echo hello"}))
+	c.Assert(ok, tc.Equals, true)
+	c.Assert(err, tc.ErrorIsNil)
+
+	select {
+	case req := <-request:
+		c.Check(req.Payload, tc.DeepEquals, []byte("test payload"))
+	case <-c.Context().Done():
+		c.Fatal("machine request was not proxied to the client")
+	}
+}
+
 func (s *machineSuite) TestSessionHandlerProxiesPTYAndWindowChanges(c *tc.C) {
 	destination, err := virtualhostname.NewInfoMachineTarget("8419cd78-4993-4c3a-928e-c646226beeee", "0")
 	c.Assert(err, tc.ErrorIsNil)
@@ -92,7 +145,24 @@ func (s *machineSuite) TestSessionHandlerProxiesPTYAndWindowChanges(c *tc.C) {
 			return true
 		},
 		Handler: func(session ssh.Session) {
+			_, windows, ok := session.Pty()
+			if !ok {
+				c.Error("expected a PTY")
+				return
+			}
 			close(ready)
+			_, ok = <-windows
+			if !ok {
+				c.Error("PTY window channel closed")
+				return
+			}
+			window, ok := <-windows
+			if !ok {
+				c.Error("PTY window channel closed")
+				return
+			}
+			c.Check(window.Height, tc.Equals, 30)
+			c.Check(window.Width, tc.Equals, 100)
 			_, _ = io.WriteString(session, "shell done\n")
 		},
 	})
@@ -100,7 +170,9 @@ func (s *machineSuite) TestSessionHandlerProxiesPTYAndWindowChanges(c *tc.C) {
 	handlers, err := NewHandlers(destination, connectorForServer(machine), loggertesting.WrapCheckLog(c))
 	c.Assert(err, tc.ErrorIsNil)
 
-	controller := startSSHTestServer(c, &ssh.Server{Handler: handlers.SessionHandler})
+	controller := startSSHTestServer(c, &ssh.Server{ChannelHandlers: map[string]ssh.ChannelHandler{
+		"session": handlers.SessionChannelHandler(),
+	}})
 
 	client, err := controller.client()
 	c.Assert(err, tc.ErrorIsNil)
@@ -135,21 +207,17 @@ func (s *machineSuite) TestSessionHandlerReportsConnectionFailure(c *tc.C) {
 	}), loggertesting.WrapCheckLog(c))
 	c.Assert(err, tc.ErrorIsNil)
 
-	controller := startSSHTestServer(c, &ssh.Server{Handler: handlers.SessionHandler})
+	controller := startSSHTestServer(c, &ssh.Server{ChannelHandlers: map[string]ssh.ChannelHandler{
+		"session": handlers.SessionChannelHandler(),
+	}})
 
 	client, err := controller.client()
 	c.Assert(err, tc.ErrorIsNil)
 	defer client.Close()
 
-	session, err := client.NewSession()
-	c.Assert(err, tc.ErrorIsNil)
-	defer session.Close()
-
-	var stderr bytes.Buffer
-	session.Stderr = &stderr
-
-	err = session.Run("echo hello")
-
-	c.Assert(err, tc.ErrorMatches, "Process exited with status 1")
-	c.Check(stderr.String(), tc.Equals, "failed to connect to machine: connection failed\r\n")
+	_, err = client.NewSession()
+	var openErr *gossh.OpenChannelError
+	c.Assert(errors.As(err, &openErr), tc.IsTrue)
+	c.Check(openErr.Reason, tc.Equals, gossh.ConnectionFailed)
+	c.Check(openErr.Message, tc.Equals, "failed to connect to machine: connection failed")
 }
