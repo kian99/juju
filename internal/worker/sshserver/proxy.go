@@ -16,8 +16,10 @@ import (
 
 // ProxyHandlers provide session, local forwarding, and SFTP handling for a target.
 type ProxyHandlers interface {
-	// SessionChannelHandler returns a handler for proxying SSH session channels
-	// at a lower level than the parsed Gliderlabs SSH session. This is used for machine proxying.
+	// SessionChannelHandler returns a handler for SSH session channels
+	// at a lower level than SessionHandler which does extra processing
+	// in the Gliderlab's library.
+	// This is used for machine proxying.
 	SessionChannelHandler() ssh.ChannelHandler
 	// SessionHandler handles a parsed Gliderlabs SSH session.
 	// This is used for Kubernetes proxying.

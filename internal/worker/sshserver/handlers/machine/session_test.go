@@ -132,6 +132,64 @@ func (s *machineSuite) TestSessionHandlerProxiesMachineRequests(c *tc.C) {
 	}
 }
 
+// TestSessionHandlerWaitsForMachineCloseAfterEOF verifies that remote EOF does
+// not terminate the proxy before the remote channel is closed.
+// An EOF and a close message are different things in SSH.
+func (s *machineSuite) TestSessionHandlerWaitsForMachineCloseAfterEOF(c *tc.C) {
+	destination, err := virtualhostname.NewInfoMachineTarget("8419cd78-4993-4c3a-928e-c646226beeee", "0")
+	c.Assert(err, tc.ErrorIsNil)
+
+	machineSessionStopped := make(chan struct{})
+	machine := startSSHTestServer(c, &ssh.Server{SubsystemHandlers: map[string]ssh.SubsystemHandler{
+		"sftp": func(session ssh.Session) {
+			_, _ = session.Write([]byte("response"))
+			_ = session.CloseWrite()
+			<-session.Context().Done()
+			close(machineSessionStopped)
+		},
+	}})
+
+	handlers, err := NewHandlers(destination, connectorForServer(machine), loggertesting.WrapCheckLog(c))
+	c.Assert(err, tc.ErrorIsNil)
+
+	proxyDone := make(chan struct{})
+	controller := startSSHTestServer(c, &ssh.Server{ChannelHandlers: map[string]ssh.ChannelHandler{
+		"session": func(server *ssh.Server, conn *gossh.ServerConn, newChan gossh.NewChannel, ctx ssh.Context) {
+			handlers.SessionChannelHandler()(server, conn, newChan, ctx)
+			close(proxyDone)
+		},
+	}})
+
+	client, err := controller.client()
+	c.Assert(err, tc.ErrorIsNil)
+
+	channel, _, err := client.OpenChannel("session", nil)
+	c.Assert(err, tc.ErrorIsNil)
+	c.Assert(requestSubsystem(channel, "sftp"), tc.ErrorIsNil)
+
+	data, err := io.ReadAll(channel)
+	c.Assert(err, tc.ErrorIsNil)
+	c.Check(data, tc.DeepEquals, []byte("response"))
+
+	select {
+	case <-proxyDone:
+		c.Error("proxy returned before the machine closed its channel")
+	default:
+	}
+
+	c.Assert(client.Close(), tc.ErrorIsNil)
+	select {
+	case <-proxyDone:
+	case <-c.Context().Done():
+		c.Fatal("proxy did not stop after the client disconnected")
+	}
+	select {
+	case <-machineSessionStopped:
+	case <-c.Context().Done():
+		c.Fatal("machine session did not stop after the client disconnected")
+	}
+}
+
 func (s *machineSuite) TestSessionHandlerProxiesPTYAndWindowChanges(c *tc.C) {
 	destination, err := virtualhostname.NewInfoMachineTarget("8419cd78-4993-4c3a-928e-c646226beeee", "0")
 	c.Assert(err, tc.ErrorIsNil)

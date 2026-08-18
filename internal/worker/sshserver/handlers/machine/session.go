@@ -19,8 +19,6 @@ func (h *Handlers) SessionChannelHandler() ssh.ChannelHandler {
 		accepted := false
 		handleProxy(h, ctx, proxyConfig[*sessionChannel]{
 			createRemote: func(_ context.Context, client *gossh.Client) (*sessionChannel, error) {
-				channelType := newChan.ChannelType()
-				h.logger.Infof(ctx, "machine proxying channel type %q", channelType)
 				channel, requests, err := client.OpenChannel(newChan.ChannelType(), newChan.ExtraData())
 				if err != nil {
 					return nil, err
