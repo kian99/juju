@@ -29,7 +29,6 @@ import (
 	leaseservice "github.com/juju/juju/domain/lease/service"
 	leasestate "github.com/juju/juju/domain/lease/state"
 	domainmodel "github.com/juju/juju/domain/model"
-	modelerrors "github.com/juju/juju/domain/model/errors"
 	modelservice "github.com/juju/juju/domain/model/service"
 	modelmigrationservice "github.com/juju/juju/domain/model/service/migration"
 	modelstatecontroller "github.com/juju/juju/domain/model/state/controller"
@@ -508,11 +507,7 @@ func (op *opImportAuthorizedKeys) Execute(ctx context.Context, st *importState) 
 // model means an earlier cleanup attempt already removed the model and its key
 // associations, so it is an idempotent success.
 func (op *opImportAuthorizedKeys) RemoveOnAbort(ctx context.Context) error {
-	err := op.keymanager.DeleteKeysForModel(ctx)
-	if errors.Is(err, modelerrors.NotFound) {
-		return nil
-	}
-	return errors.Capture(err)
+	return nil
 }
 
 // ----
@@ -655,7 +650,7 @@ func newImportServices(deps Deps, modelUUID coremodel.UUID) importServices {
 			credentialstate.NewState(deps.ControllerDB), deps.Logger,
 		),
 		keymanager: keymanagerservice.NewService(
-			modelUUID, keymanagerstate.NewState(deps.ControllerDB),
+			keymanagerstate.NewState(deps.ControllerDB),
 		),
 		secretBackend: secretbackendservice.NewService(
 			secretbackendstate.NewState(deps.ControllerDB, deps.Logger), deps.Logger,

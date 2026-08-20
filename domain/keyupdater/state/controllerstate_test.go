@@ -127,7 +127,7 @@ func (s *controllerStateSuite) TestGetUserAuthorizedKeysForModel(c *tc.C) {
 	kmSt := keymanagerstate.NewState(s.TxnRunnerFactory())
 	keysToAdd := generatePublicKeys(c, testingPublicKeys)
 
-	err := kmSt.AddPublicKeysForUser(c.Context(), s.modelUUID, s.userUUID, keysToAdd[0:1])
+	err := kmSt.AddPublicKeysForUser(c.Context(), s.userUUID, keysToAdd[0:1])
 	c.Check(err, tc.ErrorIsNil)
 
 	secondUserId := usertesting.GenUserUUID(c)
@@ -142,7 +142,7 @@ func (s *controllerStateSuite) TestGetUserAuthorizedKeysForModel(c *tc.C) {
 	)
 	c.Assert(err, tc.ErrorIsNil)
 
-	err = kmSt.AddPublicKeysForUser(c.Context(), s.modelUUID, secondUserId, keysToAdd[1:3])
+	err = kmSt.AddPublicKeysForUser(c.Context(), secondUserId, keysToAdd[1:3])
 	c.Check(err, tc.ErrorIsNil)
 
 	st := NewControllerState(s.TxnRunnerFactory())

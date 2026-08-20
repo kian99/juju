@@ -897,7 +897,6 @@ func (m *stateSuite) TestDeleteModel(c *tc.C) {
 	keyManagerState := keymanagerstate.NewState(m.TxnRunnerFactory())
 	err := keyManagerState.AddPublicKeysForUser(
 		c.Context(),
-		m.uuid,
 		m.userUUID,
 		[]keymanager.PublicKey{
 			{

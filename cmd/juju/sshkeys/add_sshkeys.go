@@ -14,12 +14,11 @@ import (
 )
 
 var usageAddSSHKeySummary = `
-Adds a public SSH key to a model.`[1:]
+Adds a public SSH key to the controller.`[1:]
 
 var usageAddSSHKeyDetails = `
-Juju maintains a per-model cache of public SSH keys which it copies to
-each unit (including units already deployed). All keys must be added to a model
-explicitly with this command, quoting the entire public key as an argument.
+Juju maintains public SSH keys on the controller. Keys are associated with
+your Juju user and are available to models on the controller.
 
 `[1:]
 
@@ -87,8 +86,6 @@ func (c *addKeysCommand) Run(ctx *cmd.Context) error {
 		return err
 	}
 	defer client.Close()
-	// TODO(alexisb) - currently keys are global which is not ideal.
-	// keymanager needs to be updated to allow keys per user
 	c.user = "admin"
 	results, err := client.AddKeys(ctx, c.user, c.sshKeys...)
 	if err != nil {

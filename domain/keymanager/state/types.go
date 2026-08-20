@@ -11,24 +11,6 @@ type publicKey struct {
 	PublicKey   string `db:"public_key"`
 }
 
-// publicKeyData represents a single raw public key from the user public key
-// table.
-type publicKeyData struct {
-	PublicKey string `db:"public_key"`
-}
-
-// modelAuthorizedKey represents a single row from the model_authorized_keys
-// table.
-type modelAuthorizedKey struct {
-	UserPublicSSHKeyId int64  `db:"user_public_ssh_key_id"`
-	ModelUUID          string `db:"model_uuid"`
-}
-
-// modelUUIDValue represents a model id for associating public keys with.
-type modelUUIDValue struct {
-	UUID string `db:"model_uuid"`
-}
-
 // userPublicKey represents a single user public key within the controller.
 type userPublicKey struct {
 	UserName  string `db:"name"`
@@ -39,10 +21,6 @@ type userPublicKey struct {
 type userPublicKeyId struct {
 	Id int64 `db:"id"`
 }
-
-// userPublicKeyIds represents an aggregate slice of [userPublicKeyId] for
-// performing bulk in operations.
-type userPublicKeyIds []userPublicKeyId
 
 // userPublicKeyInsert describes the data input needed for inserting new public
 // keys for a user.

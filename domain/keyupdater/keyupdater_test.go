@@ -168,7 +168,7 @@ func (s *keyUpdaterSuite) TestWatchAuthorizedKeysForMachine(c *tc.C) {
 	c.Assert(err, tc.ErrorIsNil)
 
 	keyManagerSt := keymanagerstate.NewState(s.TxnRunnerFactory())
-	keyManagerSvc := keymanagerservice.NewService(s.modelID, keyManagerSt)
+	keyManagerSvc := keymanagerservice.NewService(keyManagerSt)
 
 	harness := watchertest.NewHarness(idler, watchertest.NewWatcherC(c, watcher))
 

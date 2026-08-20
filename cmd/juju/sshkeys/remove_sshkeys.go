@@ -14,13 +14,12 @@ import (
 )
 
 var usageRemoveSSHKeySummary = `
-Removes a public SSH key (or keys) from a model.`[1:]
+Removes a public SSH key (or keys) from the controller.`[1:]
 
 var usageRemoveSSHKeyDetails = `
-Juju maintains a per-model cache of public SSH keys which it copies to
-each unit. This command will remove a specified key (or space-separated
-list of keys) from the model cache and all current units deployed in that
-model. The keys to be removed may be specified by the key's fingerprint
+Juju maintains public SSH keys on the controller. This command removes a
+specified key (or space-separated list of keys) for the current user. The
+keys to be removed may be specified by the key's fingerprint
 using a SHA256 sum or by the text label associated with them. Keys may also be
 removed by specifying the key verbatim.
 `[1:]
@@ -78,8 +77,6 @@ func (c *removeKeysCommand) Run(ctx *cmd.Context) error {
 	}
 	defer client.Close()
 
-	// TODO(alexisb) - currently keys are global which is not ideal.
-	// keymanager needs to be updated to allow keys per user
 	c.user = "admin"
 	results, err := client.DeleteKeys(ctx, c.user, c.keyIds...)
 	if err != nil {

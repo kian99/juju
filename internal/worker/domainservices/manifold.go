@@ -20,9 +20,9 @@ import (
 	"github.com/juju/juju/core/objectstore"
 	"github.com/juju/juju/core/providertracker"
 	"github.com/juju/juju/core/storage"
+	keymanagerservice "github.com/juju/juju/domain/keymanager/service"
 	domainservices "github.com/juju/juju/domain/services"
 	"github.com/juju/juju/internal/services"
-	sshimporter "github.com/juju/juju/internal/ssh/importer"
 	"github.com/juju/juju/internal/worker/common"
 )
 
@@ -54,7 +54,6 @@ type DomainServicesGetterFn func(
 	providertracker.ProviderFactory,
 	objectstore.ObjectStoreGetter,
 	storage.StorageRegistryGetter,
-	domainservices.PublicKeyImporter,
 	lease.Manager,
 	coredatabase.ClusterDescriber,
 	corehttp.HTTPClient,
@@ -71,6 +70,7 @@ type ControllerDomainServicesFn func(
 	clock.Clock,
 	logger.Logger,
 	logger.LoggerContextGetter,
+	keymanagerservice.PublicKeyImporter,
 ) services.ControllerDomainServices
 
 // ModelDomainServicesFn is a function that returns a model domain services.
@@ -81,7 +81,6 @@ type ModelDomainServicesFn func(
 	objectstore.NamespacedObjectStoreGetter,
 	objectstore.ModelObjectStoreGetter,
 	storage.ModelStorageRegistryGetter,
-	domainservices.PublicKeyImporter,
 	lease.ModelLeaseManagerGetter,
 	coredatabase.ClusterDescriber,
 	corehttp.HTTPClient,
@@ -195,11 +194,6 @@ func (config ManifoldConfig) start(ctx context.Context, getter dependency.Getter
 		return nil, errors.Trace(err)
 	}
 
-	sshImporterClient, err := httpClientGetter.GetHTTPClient(ctx, corehttp.SSHImporterPurpose)
-	if err != nil {
-		return nil, errors.Trace(err)
-	}
-
 	simpleStreamsClient, err := httpClientGetter.GetHTTPClient(ctx, corehttp.SimpleStreamPurpose)
 	if err != nil {
 		return nil, errors.Trace(err)
@@ -221,7 +215,6 @@ func (config ManifoldConfig) start(ctx context.Context, getter dependency.Getter
 		ProviderFactory:             providerFactory,
 		ObjectStoreGetter:           objectStoreGetter,
 		StorageRegistryGetter:       storageRegistryGetter,
-		PublicKeyImporter:           sshimporter.NewImporter(sshImporterClient),
 		LeaseManager:                leaseManager,
 		LoggerContextGetter:         loggerContextGetter,
 		LogDir:                      config.LogDir,
@@ -263,6 +256,7 @@ func NewControllerDomainServices(
 	clock clock.Clock,
 	logger logger.Logger,
 	loggerContextGetter logger.LoggerContextGetter,
+	publicKeyImporter keymanagerservice.PublicKeyImporter,
 ) services.ControllerDomainServices {
 	return domainservices.NewControllerServices(
 		changestream.NewWatchableDBFactoryForNamespace(dbGetter.GetWatchableDB, coredatabase.ControllerNS),
@@ -270,6 +264,7 @@ func NewControllerDomainServices(
 		clock,
 		logger,
 		loggerContextGetter,
+		publicKeyImporter,
 	)
 }
 
@@ -282,7 +277,6 @@ func NewProviderTrackerModelDomainServices(
 	controllerObjectStoreGetter objectstore.NamespacedObjectStoreGetter,
 	modelObjectStoreGetter objectstore.ModelObjectStoreGetter,
 	storageRegistry storage.ModelStorageRegistryGetter,
-	publicKeyImporter domainservices.PublicKeyImporter,
 	leaseManager lease.ModelLeaseManagerGetter,
 	clusterDescriber coredatabase.ClusterDescriber,
 	simpleStreamsHTTPClient corehttp.HTTPClient,
@@ -298,7 +292,6 @@ func NewProviderTrackerModelDomainServices(
 		controllerObjectStoreGetter,
 		modelObjectStoreGetter,
 		storageRegistry,
-		publicKeyImporter,
 		leaseManager,
 		clusterDescriber,
 		simpleStreamsHTTPClient,
@@ -316,7 +309,6 @@ func NewDomainServicesGetter(
 	providerFactory providertracker.ProviderFactory,
 	objectStoreGetter objectstore.ObjectStoreGetter,
 	storageRegistryGetter storage.StorageRegistryGetter,
-	publicKeyImporter domainservices.PublicKeyImporter,
 	leaseManager lease.Manager,
 	clusterDescriber coredatabase.ClusterDescriber,
 	simpleStreamsHTTPClient corehttp.HTTPClient,
@@ -331,7 +323,6 @@ func NewDomainServicesGetter(
 		providerFactory:         providerFactory,
 		objectStoreGetter:       objectStoreGetter,
 		storageRegistryGetter:   storageRegistryGetter,
-		publicKeyImporter:       publicKeyImporter,
 		leaseManager:            leaseManager,
 		clusterDescriber:        clusterDescriber,
 		simpleStreamsHTTPClient: simpleStreamsHTTPClient,

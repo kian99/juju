@@ -962,11 +962,9 @@ func (s *userStateSuite) TestRemoveUserSSHKeys(c *tc.C) {
 	)
 	c.Assert(err, tc.ErrorIsNil)
 
-	modelId := modeltesting.CreateTestModel(c, s.TxnRunnerFactory(), "test-model")
-
-	// Add a public key onto a model for the user.
+	// Add a controller-scoped public key for the user.
 	km := keymanagerstate.NewState(s.TxnRunnerFactory())
-	err = km.AddPublicKeysForUser(c.Context(), modelId, userToRemoveUUID, []keymanager.PublicKey{
+	err = km.AddPublicKeysForUser(c.Context(), userToRemoveUUID, []keymanager.PublicKey{
 		{
 			Comment:         "test",
 			FingerprintHash: keymanager.FingerprintHashAlgorithmSHA256,

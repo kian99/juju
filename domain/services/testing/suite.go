@@ -283,6 +283,7 @@ func (s *DomainServicesSuite) DomainServicesGetterWithStorageRegistry(c *tc.C, o
 			clock,
 			logger,
 			loggertesting.WrapCheckLogForContextGetter(c),
+			sshimporter.NewImporter(&http.Client{}),
 		)
 		modelServices := domainservices.NewModelServices(
 			modelUUID,
@@ -300,7 +301,6 @@ func (s *DomainServicesSuite) DomainServicesGetterWithStorageRegistry(c *tc.C, o
 			modelStorageRegistryGetter(func(ctx context.Context) (storage.ProviderRegistry, error) {
 				return storageRegistry, nil
 			}),
-			sshimporter.NewImporter(&http.Client{}),
 			modelApplicationLeaseManagerGetter(func() lease.LeaseManager {
 				return leaseManager
 			}),

@@ -23,7 +23,7 @@ import (
 	"github.com/juju/juju/core/objectstore"
 	"github.com/juju/juju/core/providertracker"
 	"github.com/juju/juju/core/storage"
-	domainservices "github.com/juju/juju/domain/services"
+	keymanagerservice "github.com/juju/juju/domain/keymanager/service"
 	"github.com/juju/juju/internal/services"
 )
 
@@ -105,7 +105,6 @@ func (s *manifoldSuite) TestValidateConfig(c *tc.C) {
 func (s *manifoldSuite) TestStart(c *tc.C) {
 	defer s.setupMocks(c).Finish()
 
-	s.httpClientGetter.EXPECT().GetHTTPClient(gomock.Any(), corehttp.SSHImporterPurpose).Return(s.httpClient, nil)
 	s.httpClientGetter.EXPECT().GetHTTPClient(gomock.Any(), corehttp.SimpleStreamPurpose).Return(s.simpleStreamClient, nil)
 
 	getter := map[string]any{
@@ -154,7 +153,6 @@ func (s *manifoldSuite) TestOutputControllerDomainServices(c *tc.C) {
 		ProviderFactory:             s.providerFactory,
 		ObjectStoreGetter:           s.objectStoreGetter,
 		StorageRegistryGetter:       s.storageRegistryGetter,
-		PublicKeyImporter:           s.publicKeyImporter,
 		LeaseManager:                s.leaseManager,
 		NewDomainServicesGetter:     NewDomainServicesGetter,
 		NewControllerDomainServices: NewControllerDomainServices,
@@ -184,7 +182,6 @@ func (s *manifoldSuite) TestOutputDomainServicesGetter(c *tc.C) {
 		ProviderFactory:             s.providerFactory,
 		ObjectStoreGetter:           s.objectStoreGetter,
 		StorageRegistryGetter:       s.storageRegistryGetter,
-		PublicKeyImporter:           s.publicKeyImporter,
 		LeaseManager:                s.leaseManager,
 		NewDomainServicesGetter:     NewDomainServicesGetter,
 		NewControllerDomainServices: NewControllerDomainServices,
@@ -214,7 +211,6 @@ func (s *manifoldSuite) TestOutputInvalid(c *tc.C) {
 		ProviderFactory:             s.providerFactory,
 		ObjectStoreGetter:           s.objectStoreGetter,
 		StorageRegistryGetter:       s.storageRegistryGetter,
-		PublicKeyImporter:           s.publicKeyImporter,
 		LeaseManager:                s.leaseManager,
 		NewDomainServicesGetter:     NewDomainServicesGetter,
 		NewControllerDomainServices: NewControllerDomainServices,
@@ -234,7 +230,7 @@ func (s *manifoldSuite) TestOutputInvalid(c *tc.C) {
 }
 
 func (s *manifoldSuite) TestNewControllerDomainServices(c *tc.C) {
-	factory := NewControllerDomainServices(s.dbGetter, s.modelObjectStoreGetter, s.clock, s.logger, s.loggerContextGetter)
+	factory := NewControllerDomainServices(s.dbGetter, s.modelObjectStoreGetter, s.clock, s.logger, s.loggerContextGetter, nil)
 	c.Assert(factory, tc.NotNil)
 }
 
@@ -245,7 +241,6 @@ func (s *manifoldSuite) TestNewModelDomainServices(c *tc.C) {
 		s.controllerObjectStoreGetter,
 		s.modelObjectStoreGetter,
 		s.modelStorageRegistryGetter,
-		s.publicKeyImporter,
 		s.modelLeaseManagerGetter,
 		s.clusterDescriber,
 		s.httpClient,
@@ -262,7 +257,7 @@ func (s *manifoldSuite) TestNewDomainServicesGetter(c *tc.C) {
 	s.loggerContextGetter.EXPECT().GetLoggerContext(gomock.Any(), coremodel.UUID("model")).Return(s.loggerContext, nil)
 	s.loggerContext.EXPECT().GetLogger("juju.services").Return(s.logger)
 
-	ctrlFactory := NewControllerDomainServices(s.dbGetter, s.modelObjectStoreGetter, s.clock, s.logger, s.loggerContextGetter)
+	ctrlFactory := NewControllerDomainServices(s.dbGetter, s.modelObjectStoreGetter, s.clock, s.logger, s.loggerContextGetter, nil)
 	factory := NewDomainServicesGetter(
 		ctrlFactory,
 		s.dbGetter,
@@ -270,7 +265,6 @@ func (s *manifoldSuite) TestNewDomainServicesGetter(c *tc.C) {
 		nil,
 		s.objectStoreGetter,
 		s.storageRegistryGetter,
-		s.publicKeyImporter,
 		s.leaseManager,
 		s.clusterDescriber,
 		s.httpClient,
@@ -314,7 +308,6 @@ func noopDomainServicesGetter(
 	providertracker.ProviderFactory,
 	objectstore.ObjectStoreGetter,
 	storage.StorageRegistryGetter,
-	domainservices.PublicKeyImporter,
 	lease.Manager,
 	database.ClusterDescriber,
 	corehttp.HTTPClient,
@@ -331,6 +324,7 @@ func noopControllerDomainServices(
 	clock.Clock,
 	logger.Logger,
 	logger.LoggerContextGetter,
+	keymanagerservice.PublicKeyImporter,
 ) services.ControllerDomainServices {
 	return nil
 }
@@ -342,7 +336,6 @@ func noopModelDomainServices(
 	objectstore.NamespacedObjectStoreGetter,
 	objectstore.ModelObjectStoreGetter,
 	storage.ModelStorageRegistryGetter,
-	domainservices.PublicKeyImporter,
 	lease.ModelLeaseManagerGetter,
 	database.ClusterDescriber,
 	corehttp.HTTPClient,

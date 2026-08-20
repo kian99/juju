@@ -107,6 +107,10 @@ type ControllerDomainServices interface {
 	Logging() *loggingservice.WatchableService
 	// SSHServerHostKey returns the service for controller SSH server host keys.
 	SSHServerHostKey() *sshcontrollerservice.Service
+	// KeyManager returns the controller-scoped user SSH key service.
+	KeyManager() *keymanagerservice.Service
+	// KeyManagerWithImporter returns the controller-scoped importer service.
+	KeyManagerWithImporter() *keymanagerservice.ImporterService
 }
 
 // ModelDomainServices provides access to the services required by the
@@ -138,11 +142,6 @@ type ModelDomainServices interface {
 	Status() *statusservice.LeadershipService
 	// Resolve returns the resolve service.
 	Resolve() *resolveservice.WatchableService
-	// KeyManager returns the key manager service.
-	KeyManager() *keymanagerservice.Service
-	// KeyManagerWithImporter returns they manager service that is capable of
-	// importing keys from an external source.
-	KeyManagerWithImporter() *keymanagerservice.ImporterService
 	// KeyUpdater returns the key updater service.
 	KeyUpdater() *keyupdaterservice.WatchableService
 	// Network returns the space service.

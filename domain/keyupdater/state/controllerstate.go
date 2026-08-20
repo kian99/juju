@@ -76,8 +76,8 @@ WHERE key IN ($S[:])
 	return rval, nil
 }
 
-// GetUserAuthorizedKeysForModel is responsible for returning all of the user
-// authorized keys for a model.
+// GetUserAuthorizedKeysForModel returns the controller user keys relevant to
+// a model. The model argument is retained for the updater's API contract.
 // The following errors can be expected:
 // - [modelerrors.NotFound] if the model does not exist.
 func (s *ControllerState) GetUserAuthorizedKeysForModel(
@@ -91,7 +91,6 @@ func (s *ControllerState) GetUserAuthorizedKeysForModel(
 			modelUUID, err,
 		)
 	}
-
 	modelUUIDVal := modelUUIDValue{modelUUID.String()}
 
 	modelExistsStmt, err := s.Prepare(`
@@ -108,9 +107,12 @@ WHERE uuid = $modelUUIDValue.model_uuid
 
 	stmt, err := s.Prepare(`
 SELECT &authorizedKey.*
-FROM v_model_authorized_keys
-WHERE model_uuid = $modelUUIDValue.model_uuid
-`, modelUUIDVal, authorizedKey{})
+FROM user_public_ssh_key AS upsk
+JOIN user AS u ON u.uuid = upsk.user_uuid
+JOIN user_authentication AS ua ON ua.user_uuid = u.uuid
+WHERE u.removed = false
+AND ua.disabled = false
+`, authorizedKey{})
 	if err != nil {
 		return nil, errors.Errorf(
 			"preparing model authorized keys statement when getting public keys for model %q: %w",
@@ -134,7 +136,7 @@ WHERE model_uuid = $modelUUIDValue.model_uuid
 			)
 		}
 
-		err = tx.Query(ctx, stmt, modelUUIDVal).GetAll(&authorizedKeys)
+		err = tx.Query(ctx, stmt).GetAll(&authorizedKeys)
 		if err != nil && !errors.Is(err, sqlair.ErrNoRows) {
 			return errors.Errorf(
 				"getting user authorized keys on model %q: %w",

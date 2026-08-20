@@ -17,14 +17,13 @@ import (
 )
 
 var usageListSSHKeysSummary = `
-Lists the currently known SSH keys for the current (or specified) model.`[1:]
+Lists the currently known SSH keys for the current controller.`[1:]
 
 var usageListSSHKeysDetails = `
-Juju maintains a per-model cache of SSH keys which it copies to each newly
-created unit.
+Juju maintains public SSH keys on the controller, associated with Juju users.
 
 This command will display a list of all the keys currently used by Juju in
-the current model (or the model specified, if the ` + "`-m`" + ` option is used).
+the current controller.
 
 By default a minimal list is returned, showing only the fingerprint of
 each key and its text identifier. By using the ` + "`--full`" + ` option, the entire
@@ -85,8 +84,6 @@ func (c *listKeysCommand) Run(ctx *cmd.Context) error {
 	if c.showFullKey {
 		mode = ssh.FullKeys
 	}
-	// TODO(alexisb) - currently keys are global which is not ideal.
-	// keymanager needs to be updated to allow keys per user
 	c.user = "admin"
 	results, err := client.ListKeys(ctx, mode, c.user)
 	if err != nil {

@@ -4,8 +4,6 @@
 package services
 
 import (
-	"context"
-	"net/url"
 	"path/filepath"
 
 	"github.com/juju/clock"
@@ -52,8 +50,6 @@ import (
 	crossmodelrelationstatemodel "github.com/juju/juju/domain/crossmodelrelation/state/model"
 	exportservice "github.com/juju/juju/domain/export/service"
 	exportstate "github.com/juju/juju/domain/export/state/model"
-	keymanagerservice "github.com/juju/juju/domain/keymanager/service"
-	keymanagerstate "github.com/juju/juju/domain/keymanager/state"
 	keyupdaterservice "github.com/juju/juju/domain/keyupdater/service"
 	keyupdaterstate "github.com/juju/juju/domain/keyupdater/state"
 	machineservice "github.com/juju/juju/domain/machine/service"
@@ -115,20 +111,6 @@ import (
 	"github.com/juju/juju/internal/resource/store"
 )
 
-// PublicKeyImporter describes a service that is capable of fetching and
-// providing public keys for a subject from a set of well known sources that
-// don't need to be understood by this service.
-type PublicKeyImporter interface {
-	// FetchPublicKeysForSubject is responsible for gathering all of the
-	// public keys available for a specified subject.
-	// The following errors can be expected:
-	// - [importererrors.NoResolver] when there is import resolver the subject
-	// schema.
-	// - [importerrors.SubjectNotFound] when the resolver has reported that no
-	// subject exists.
-	FetchPublicKeysForSubject(context.Context, *url.URL) ([]string, error)
-}
-
 // ModelServices provides access to the services required by the apiserver.
 type ModelServices struct {
 	modelServiceFactoryBase
@@ -138,7 +120,6 @@ type ModelServices struct {
 	controllerObjectStoreGetter objectstore.NamespacedObjectStoreGetter
 	modelObjectStoreGetter      objectstore.ModelObjectStoreGetter
 	storageRegistry             corestorage.ModelStorageRegistryGetter
-	publicKeyImporter           PublicKeyImporter
 	leaseManager                lease.ModelLeaseManagerGetter
 	clusterDescriber            database.ClusterDescriber
 	simpleStreamsClient         http.HTTPClient
@@ -156,7 +137,6 @@ func NewModelServices(
 	controllerObjectStoreGetter objectstore.NamespacedObjectStoreGetter,
 	modelObjectStoreGetter objectstore.ModelObjectStoreGetter,
 	storageRegistry corestorage.ModelStorageRegistryGetter,
-	publicKeyImporter PublicKeyImporter,
 	leaseManager lease.ModelLeaseManagerGetter,
 	clusterDescriber database.ClusterDescriber,
 	simpleStreamsClient http.HTTPClient,
@@ -176,7 +156,6 @@ func NewModelServices(
 		providerFactory:             providerFactory,
 		modelObjectStoreGetter:      modelObjectStoreGetter,
 		storageRegistry:             storageRegistry,
-		publicKeyImporter:           publicKeyImporter,
 		leaseManager:                leaseManager,
 		clusterDescriber:            clusterDescriber,
 		simpleStreamsClient:         simpleStreamsClient,
@@ -332,26 +311,6 @@ func (s *ModelServices) Resolve() *resolveservice.WatchableService {
 	return resolveservice.NewWatchableService(
 		resolveState.NewState(changestream.NewTxnRunnerFactory(s.modelDB)),
 		s.modelWatcherFactory("resolve"),
-	)
-}
-
-// KeyManager  returns the model's user public ssh key manager. Use this service
-// when wanting to modify a user's public ssh keys within a model.
-func (s *ModelServices) KeyManager() *keymanagerservice.Service {
-	return keymanagerservice.NewService(
-		s.modelUUID,
-		keymanagerstate.NewState(changestream.NewTxnRunnerFactory(s.controllerDB)),
-	)
-}
-
-// KeyManagerWithImporter returns the model's user public ssh key manager with
-// the ability to import ssh public keys from external sources. Use this service
-// when wanting to modify a user's public ssh keys within a model.
-func (s *ModelServices) KeyManagerWithImporter() *keymanagerservice.ImporterService {
-	return keymanagerservice.NewImporterService(
-		s.modelUUID,
-		s.publicKeyImporter,
-		keymanagerstate.NewState(changestream.NewTxnRunnerFactory(s.controllerDB)),
 	)
 }
 

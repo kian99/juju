@@ -12,10 +12,8 @@ import (
 	"github.com/juju/errors"
 	"github.com/juju/names/v6"
 
-	"github.com/juju/juju/apiserver/common/model"
 	apiservererrors "github.com/juju/juju/apiserver/errors"
 	"github.com/juju/juju/apiserver/facade"
-	coremodel "github.com/juju/juju/core/model"
 	"github.com/juju/juju/core/permission"
 	coressh "github.com/juju/juju/core/ssh"
 	"github.com/juju/juju/core/user"
@@ -28,7 +26,6 @@ import (
 type KeyManagerAPI struct {
 	keyManagerService KeyManagerService
 	userService       UserService
-	modelID           coremodel.UUID
 	controllerUUID    string
 	authorizer        facade.Authorizer
 	check             BlockChecker
@@ -43,26 +40,18 @@ func (api *KeyManagerAPI) checkCanRead(ctx context.Context) error {
 	}
 	err := api.authorizer.HasPermission(
 		ctx,
-		permission.ReadAccess,
-		names.NewModelTag(api.modelID.String()),
+		permission.LoginAccess,
+		names.NewControllerTag(api.controllerUUID),
 	)
 	return err
 }
 
 func (api *KeyManagerAPI) checkCanWrite(ctx context.Context) error {
-	ok, err := model.HasModelAdmin(
+	return api.authorizer.HasPermission(
 		ctx,
-		api.authorizer,
+		permission.SuperuserAccess,
 		names.NewControllerTag(api.controllerUUID),
-		names.NewModelTag(api.modelID.String()),
 	)
-	if err != nil {
-		return errors.Trace(err)
-	}
-	if !ok {
-		return apiservererrors.ErrPerm
-	}
-	return nil
 }
 
 // ListKeys returns the authorised ssh keys for the specified users.

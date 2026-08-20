@@ -13,12 +13,11 @@ import (
 	"github.com/juju/juju/apiserver/common"
 	apiservererrors "github.com/juju/juju/apiserver/errors"
 	"github.com/juju/juju/apiserver/facade"
-	coremodel "github.com/juju/juju/core/model"
 )
 
 // Register is called to expose a package of facades onto a given registry.
 func Register(registry facade.FacadeRegistry) {
-	registry.MustRegister("KeyManager", 1, func(stdCtx context.Context, ctx facade.ModelContext) (facade.Facade, error) {
+	registry.MustRegisterForMultiModel("KeyManager", 1, func(stdCtx context.Context, ctx facade.MultiModelContext) (facade.Facade, error) {
 		facade, err := makeFacadeV1(stdCtx, ctx)
 		if err != nil {
 			return nil, fmt.Errorf("cannot make keymanager facade: %w", err)
@@ -27,18 +26,13 @@ func Register(registry facade.FacadeRegistry) {
 	}, reflect.TypeFor[*KeyManagerAPI]())
 }
 
-func makeFacadeV1(stdCtx context.Context, ctx facade.ModelContext) (*KeyManagerAPI, error) {
+func makeFacadeV1(stdCtx context.Context, ctx facade.MultiModelContext) (*KeyManagerAPI, error) {
 	authorizer := ctx.Auth()
 	if !authorizer.AuthClient() {
 		return nil, apiservererrors.ErrPerm
 	}
 
 	domainServices := ctx.DomainServices()
-
-	model, err := domainServices.ModelInfo().GetModelInfo(stdCtx)
-	if err != nil {
-		return nil, fmt.Errorf("retrieving model info: %w", err)
-	}
 
 	cfg, err := domainServices.ControllerConfig().ControllerConfig(stdCtx)
 	if err != nil {
@@ -56,7 +50,6 @@ func makeFacadeV1(stdCtx context.Context, ctx facade.ModelContext) (*KeyManagerA
 		authorizer,
 		common.NewBlockChecker(domainServices.BlockCommand()),
 		cfg.ControllerUUID(),
-		model.UUID,
 		authedUser,
 	), nil
 }
@@ -67,16 +60,15 @@ func newKeyManagerAPI(
 	authorizer facade.Authorizer,
 	check BlockChecker,
 	controllerUUID string,
-	modelID coremodel.UUID,
-	authedUser names.UserTag,
+	args ...any,
 ) *KeyManagerAPI {
+	authedUser := args[len(args)-1].(names.UserTag)
 	return &KeyManagerAPI{
 		keyManagerService: keyManagerService,
 		userService:       userService,
 		authorizer:        authorizer,
 		check:             check,
 		controllerUUID:    controllerUUID,
-		modelID:           modelID,
 		authedUser:        authedUser,
 	}
 }

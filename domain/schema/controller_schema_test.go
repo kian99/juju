@@ -152,7 +152,6 @@ func (s *controllerSchemaSuite) TestControllerTables(c *tc.C) {
 		"model_migration_redirect",
 		"model_migration_redirect_user",
 		"model_database_deletion",
-		"model_authorized_keys",
 		"model_migration_import",
 		"model_migration_import_phase_type",
 		"model_migration_import_offer",
@@ -201,6 +200,7 @@ func (s *controllerSchemaSuite) TestControllerTables(c *tc.C) {
 		"secret_backend_type",
 		"secret_backend_reference",
 		"model_secret_backend",
+		"model_authorized_keys",
 
 		// macaroon bakery
 		"bakery_config",
@@ -354,9 +354,9 @@ func (s *controllerSchemaSuite) TestControllerTriggers(c *tc.C) {
 		"trg_log_model_secret_backend_update",
 		"trg_log_model_secret_backend_delete",
 
-		"trg_log_model_authorized_keys_insert",
-		"trg_log_model_authorized_keys_update",
-		"trg_log_model_authorized_keys_delete",
+		"trg_log_user_public_ssh_key_insert",
+		"trg_log_user_public_ssh_key_update",
+		"trg_log_user_public_ssh_key_delete",
 
 		"trg_log_model_insert",
 		"trg_log_model_update",

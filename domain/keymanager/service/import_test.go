@@ -54,10 +54,10 @@ func (s *importSuite) TestImportAuthorizedKeys(c *tc.C) {
 		return "", errors.Errorf("unexpected user %q", name)
 	}
 
-	s.state.EXPECT().AddPublicKeysForUser(gomock.Any(), s.modelUUID, aliceUUID, gomock.Any()).Return(nil)
-	s.state.EXPECT().AddPublicKeysForUser(gomock.Any(), s.modelUUID, bobUUID, gomock.Any()).Return(nil)
+	s.state.EXPECT().AddPublicKeysForUser(gomock.Any(), aliceUUID, gomock.Any()).Return(nil)
+	s.state.EXPECT().AddPublicKeysForUser(gomock.Any(), bobUUID, gomock.Any()).Return(nil)
 
-	err := NewService(s.modelUUID, s.state).ImportAuthorizedKeys(
+	err := NewService(s.state).ImportAuthorizedKeys(
 		c.Context(),
 		[]coremodelmigration.ModelAuthorizedKey{{
 			Username:  alice.Name(),
@@ -84,7 +84,7 @@ func (s *importSuite) TestImportAuthorizedKeysEmpty(c *tc.C) {
 	resolve := func(_ context.Context, _ user.Name) (user.UUID, error) {
 		return "", errors.New("resolve should not be called")
 	}
-	err := NewService(s.modelUUID, s.state).ImportAuthorizedKeys(
+	err := NewService(s.state).ImportAuthorizedKeys(
 		c.Context(), nil, set.NewStrings(), resolve,
 	)
 	c.Assert(err, tc.ErrorIsNil)
@@ -97,7 +97,7 @@ func (s *importSuite) TestImportAuthorizedKeysUserError(c *tc.C) {
 	resolve := func(_ context.Context, _ user.Name) (user.UUID, error) {
 		return "", expected
 	}
-	err := NewService(s.modelUUID, s.state).ImportAuthorizedKeys(
+	err := NewService(s.state).ImportAuthorizedKeys(
 		c.Context(),
 		[]coremodelmigration.ModelAuthorizedKey{{
 			Username:  "alice",

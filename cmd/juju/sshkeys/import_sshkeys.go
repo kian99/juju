@@ -100,8 +100,6 @@ func (c *importKeysCommand) Run(ctx *cmd.Context) error {
 	}
 	defer client.Close()
 
-	// TODO(alexisb) - currently keys are global which is not ideal.
-	// keymanager needs to be updated to allow keys per user
 	c.user = "admin"
 	results, err := client.ImportKeys(ctx, c.user, c.sshKeyIds...)
 	if err != nil {

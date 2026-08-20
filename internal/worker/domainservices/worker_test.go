@@ -21,7 +21,7 @@ import (
 	"github.com/juju/juju/core/objectstore"
 	"github.com/juju/juju/core/providertracker"
 	"github.com/juju/juju/core/storage"
-	domainservices "github.com/juju/juju/domain/services"
+	keymanagerservice "github.com/juju/juju/domain/keymanager/service"
 	"github.com/juju/juju/internal/services"
 )
 
@@ -76,10 +76,6 @@ func (s *workerSuite) TestValidateConfig(c *tc.C) {
 	c.Check(cfg.Validate(), tc.ErrorIs, errors.NotValid)
 
 	cfg = s.getConfig(c)
-	cfg.PublicKeyImporter = nil
-	c.Check(cfg.Validate(), tc.ErrorIs, errors.NotValid)
-
-	cfg = s.getConfig(c)
 	cfg.SimpleStreamsClient = nil
 	c.Check(cfg.Validate(), tc.ErrorIs, errors.NotValid)
 
@@ -106,7 +102,6 @@ func (s *workerSuite) getConfig(c *tc.C) Config {
 		ProviderFactory:       s.providerFactory,
 		ObjectStoreGetter:     s.objectStoreGetter,
 		StorageRegistryGetter: s.storageRegistryGetter,
-		PublicKeyImporter:     s.publicKeyImporter,
 		LeaseManager:          s.leaseManager,
 		ClusterDescriber:      s.clusterDescriber,
 		LogDir:                c.MkDir(),
@@ -121,7 +116,6 @@ func (s *workerSuite) getConfig(c *tc.C) Config {
 			providertracker.ProviderFactory,
 			objectstore.ObjectStoreGetter,
 			storage.StorageRegistryGetter,
-			domainservices.PublicKeyImporter,
 			lease.Manager,
 			database.ClusterDescriber,
 			corehttp.HTTPClient,
@@ -137,6 +131,7 @@ func (s *workerSuite) getConfig(c *tc.C) Config {
 			clock.Clock,
 			logger.Logger,
 			logger.LoggerContextGetter,
+			keymanagerservice.PublicKeyImporter,
 		) services.ControllerDomainServices {
 			return s.controllerDomainServices
 		},
@@ -147,7 +142,6 @@ func (s *workerSuite) getConfig(c *tc.C) Config {
 			objectstore.NamespacedObjectStoreGetter,
 			objectstore.ModelObjectStoreGetter,
 			storage.ModelStorageRegistryGetter,
-			domainservices.PublicKeyImporter,
 			lease.ModelLeaseManagerGetter,
 			database.ClusterDescriber,
 			corehttp.HTTPClient,

@@ -20,9 +20,9 @@ import (
 	"github.com/juju/juju/core/objectstore"
 	"github.com/juju/juju/core/providertracker"
 	"github.com/juju/juju/core/storage"
-	domainservices "github.com/juju/juju/domain/services"
 	internalerrors "github.com/juju/juju/internal/errors"
 	"github.com/juju/juju/internal/services"
+	sshimporter "github.com/juju/juju/internal/ssh/importer"
 	internalstorage "github.com/juju/juju/internal/storage"
 )
 
@@ -42,9 +42,6 @@ type Config struct {
 
 	// StorageRegistryGetter is used to get storage registry instances.
 	StorageRegistryGetter storage.StorageRegistryGetter
-
-	// PublicKeyImporter is used to import public keys.
-	PublicKeyImporter domainservices.PublicKeyImporter
 
 	// LeaseManager is used to manage leases.
 	LeaseManager lease.Manager
@@ -91,9 +88,6 @@ func (config Config) Validate() error {
 	if config.StorageRegistryGetter == nil {
 		return errors.NotValidf("nil StorageRegistryGetter")
 	}
-	if config.PublicKeyImporter == nil {
-		return errors.NotValidf("nil PublicKeyImporter")
-	}
 	if config.SimpleStreamsClient == nil {
 		return errors.NotValidf("nil SimpleStreamsClient")
 	}
@@ -139,6 +133,7 @@ func NewWorker(config Config) (worker.Worker, error) {
 		config.Clock,
 		config.Logger,
 		config.LoggerContextGetter,
+		sshimporter.NewImporter(nil),
 	)
 	w := &domainServicesWorker{
 		ctrlFactory: ctrlFactory,
@@ -149,7 +144,6 @@ func NewWorker(config Config) (worker.Worker, error) {
 			config.ProviderFactory,
 			config.ObjectStoreGetter,
 			config.StorageRegistryGetter,
-			config.PublicKeyImporter,
 			config.LeaseManager,
 			config.ClusterDescriber,
 			config.SimpleStreamsClient,
@@ -216,7 +210,6 @@ type domainServicesGetter struct {
 	providerFactory         providertracker.ProviderFactory
 	objectStoreGetter       objectstore.ObjectStoreGetter
 	storageRegistryGetter   storage.StorageRegistryGetter
-	publicKeyImporter       domainservices.PublicKeyImporter
 	leaseManager            lease.Manager
 	clusterDescriber        coredatabase.ClusterDescriber
 	simpleStreamsHTTPClient http.HTTPClient
@@ -249,7 +242,6 @@ func (s *domainServicesGetter) ServicesForModel(ctx context.Context, modelUUID c
 				modelUUID:             modelUUID,
 				storageRegistryGetter: s.storageRegistryGetter,
 			},
-			s.publicKeyImporter,
 			modelApplicationLeaseManager{
 				modelUUID: modelUUID,
 				manager:   s.leaseManager,

@@ -35,6 +35,8 @@ import (
 	externalcontrollerstate "github.com/juju/juju/domain/externalcontroller/state"
 	flagservice "github.com/juju/juju/domain/flag/service"
 	flagstate "github.com/juju/juju/domain/flag/state"
+	keymanagerservice "github.com/juju/juju/domain/keymanager/service"
+	keymanagerstate "github.com/juju/juju/domain/keymanager/state"
 	loggingservice "github.com/juju/juju/domain/logging/service"
 	loggingstate "github.com/juju/juju/domain/logging/state"
 	macaroonservice "github.com/juju/juju/domain/macaroon/service"
@@ -61,6 +63,7 @@ type ControllerServices struct {
 	controllerObjectStore objectstore.NamespacedObjectStoreGetter
 	clock                 clock.Clock
 	loggerContextGetter   logger.LoggerContextGetter
+	publicKeyImporter     keymanagerservice.PublicKeyImporter
 }
 
 // NewControllerServices returns a new registry which uses the provided controllerDB
@@ -71,6 +74,7 @@ func NewControllerServices(
 	clock clock.Clock,
 	logger logger.Logger,
 	loggerContextGetter logger.LoggerContextGetter,
+	publicKeyImporter keymanagerservice.PublicKeyImporter,
 ) *ControllerServices {
 	return &ControllerServices{
 		serviceFactoryBase: serviceFactoryBase{
@@ -80,7 +84,16 @@ func NewControllerServices(
 		controllerObjectStore: controllerObjectStoreGetter,
 		clock:                 clock,
 		loggerContextGetter:   loggerContextGetter,
+		publicKeyImporter:     publicKeyImporter,
 	}
+}
+
+// KeyManagerWithImporter returns the controller-scoped key manager importer.
+func (s *ControllerServices) KeyManagerWithImporter() *keymanagerservice.ImporterService {
+	return keymanagerservice.NewImporterService(
+		s.publicKeyImporter,
+		keymanagerstate.NewState(changestream.NewTxnRunnerFactory(s.controllerDB)),
+	)
 }
 
 // Controller returns the controller service.
@@ -249,6 +262,13 @@ func (s *ControllerServices) Logging() *loggingservice.WatchableService {
 func (s *ControllerServices) SSHServerHostKey() *sshcontrollerservice.Service {
 	return sshcontrollerservice.NewService(
 		sshcontrollerstate.NewState(changestream.NewTxnRunnerFactory(s.controllerDB)),
+	)
+}
+
+// KeyManager returns the controller-scoped user SSH key service.
+func (s *ControllerServices) KeyManager() *keymanagerservice.Service {
+	return keymanagerservice.NewService(
+		keymanagerstate.NewState(changestream.NewTxnRunnerFactory(s.controllerDB)),
 	)
 }
 

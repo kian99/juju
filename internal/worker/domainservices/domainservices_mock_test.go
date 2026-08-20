@@ -90,6 +90,8 @@ type MockControllerDomainServicesMockRecorder struct {
 	credentialExpects                 []*gomock.Call0_1[*service15.WatchableService]
 	externalControllerExpects         []*gomock.Call0_1[*service18.WatchableService]
 	flagExpects                       []*gomock.Call0_1[*service19.Service]
+	keyManagerExpects                 []*gomock.Call0_1[*service20.Service]
+	keyManagerWithImporterExpects     []*gomock.Call0_1[*service20.ImporterService]
 	loggingExpects                    []*gomock.Call0_1[*service22.WatchableService]
 	macaroonExpects                   []*gomock.Call0_1[*service23.Service]
 	modelExpects                      []*gomock.Call0_1[*service25.WatchableService]
@@ -310,6 +312,42 @@ func (mr *MockControllerDomainServicesMockRecorder) Flag() *MockControllerDomain
 // MockControllerDomainServicesFlagCall is the typed call wrapper for Flag.
 type MockControllerDomainServicesFlagCall = gomock.Call0_1[*service19.Service]
 
+// KeyManager mocks base method.
+func (m *MockControllerDomainServices) KeyManager() *service20.Service {
+	m.ctrl.T.Helper()
+	return gomock.Dispatch0_1(&m.recorder.keyManagerExpects, m.ctrl, m, "KeyManager")
+}
+
+// KeyManager indicates an expected call of KeyManager.
+func (mr *MockControllerDomainServicesMockRecorder) KeyManager() *MockControllerDomainServicesKeyManagerCall {
+	mr.mock.ctrl.T.Helper()
+	call := gomock.NewCall0_1[*service20.Service](mr.mock.ctrl.T, mr.mock, "KeyManager")
+	mr.keyManagerExpects = append(mr.keyManagerExpects, call)
+	mr.mock.ctrl.Track(call.Call)
+	return call
+}
+
+// MockControllerDomainServicesKeyManagerCall is the typed call wrapper for KeyManager.
+type MockControllerDomainServicesKeyManagerCall = gomock.Call0_1[*service20.Service]
+
+// KeyManagerWithImporter mocks base method.
+func (m *MockControllerDomainServices) KeyManagerWithImporter() *service20.ImporterService {
+	m.ctrl.T.Helper()
+	return gomock.Dispatch0_1(&m.recorder.keyManagerWithImporterExpects, m.ctrl, m, "KeyManagerWithImporter")
+}
+
+// KeyManagerWithImporter indicates an expected call of KeyManagerWithImporter.
+func (mr *MockControllerDomainServicesMockRecorder) KeyManagerWithImporter() *MockControllerDomainServicesKeyManagerWithImporterCall {
+	mr.mock.ctrl.T.Helper()
+	call := gomock.NewCall0_1[*service20.ImporterService](mr.mock.ctrl.T, mr.mock, "KeyManagerWithImporter")
+	mr.keyManagerWithImporterExpects = append(mr.keyManagerWithImporterExpects, call)
+	mr.mock.ctrl.Track(call.Call)
+	return call
+}
+
+// MockControllerDomainServicesKeyManagerWithImporterCall is the typed call wrapper for KeyManagerWithImporter.
+type MockControllerDomainServicesKeyManagerWithImporterCall = gomock.Call0_1[*service20.ImporterService]
+
 // Logging mocks base method.
 func (m *MockControllerDomainServices) Logging() *service22.WatchableService {
 	m.ctrl.T.Helper()
@@ -463,46 +501,44 @@ type MockModelDomainServices struct {
 
 // MockModelDomainServicesMockRecorder is the mock recorder for MockModelDomainServices.
 type MockModelDomainServicesMockRecorder struct {
-	mock                          *MockModelDomainServices
-	agentExpects                  []*gomock.Call0_1[*service26.WatchableService]
-	agentBinaryExpects            []*gomock.Call0_1[*service0.AgentBinaryService]
-	agentBinaryStoreExpects       []*gomock.Call0_1[*service0.AgentBinaryStore]
-	agentPasswordExpects          []*gomock.Call0_1[*service1.Service]
-	agentProvisionerExpects       []*gomock.Call0_1[*service2.Service]
-	annotationExpects             []*gomock.Call0_1[*service3.Service]
-	applicationExpects            []*gomock.Call0_1[*service4.WatchableService]
-	blockCommandExpects           []*gomock.Call0_1[*service6.Service]
-	blockDeviceExpects            []*gomock.Call0_1[*service7.WatchableService]
-	changeStreamExpects           []*gomock.Call0_1[*service8.Service]
-	cloudImageMetadataExpects     []*gomock.Call0_1[*service10.Service]
-	configExpects                 []*gomock.Call0_1[*service27.WatchableService]
-	controllerUpgraderExpects     []*gomock.Call0_1[*service14.Service]
-	crossModelRelationExpects     []*gomock.Call0_1[*service16.WatchableService]
-	exportExpects                 []*gomock.Call0_1[*service17.Service]
-	keyManagerExpects             []*gomock.Call0_1[*service20.Service]
-	keyManagerWithImporterExpects []*gomock.Call0_1[*service20.ImporterService]
-	keyUpdaterExpects             []*gomock.Call0_1[*service21.WatchableService]
-	machineExpects                []*gomock.Call0_1[*service24.WatchableService]
-	modelInfoExpects              []*gomock.Call0_1[*service25.ProviderModelService]
-	modelMigrationExpects         []*gomock.Call0_1[*service29.WatchableService]
-	modelProviderExpects          []*gomock.Call0_1[*service30.Service]
-	modelSecretBackendExpects     []*gomock.Call0_1[*service41.ModelSecretBackendService]
-	networkExpects                []*gomock.Call0_1[*service31.WatchableService]
-	operationExpects              []*gomock.Call0_1[*service32.WatchableService]
-	portExpects                   []*gomock.Call0_1[*service33.WatchableService]
-	provisioningExpects           []*gomock.Call0_1[*service34.Service]
-	proxyExpects                  []*gomock.Call0_1[*service35.Service]
-	relationExpects               []*gomock.Call0_1[*service36.WatchableService]
-	removalExpects                []*gomock.Call0_1[*service37.WatchableService]
-	resolveExpects                []*gomock.Call0_1[*service38.WatchableService]
-	resourceExpects               []*gomock.Call0_1[*service39.Service]
-	sSHExpects                    []*gomock.Call0_1[*model0.WatchableService]
-	secretExpects                 []*gomock.Call0_1[*service40.WatchableService]
-	statusExpects                 []*gomock.Call0_1[*service42.LeadershipService]
-	storageExpects                []*gomock.Call0_1[*service43.Service]
-	storageProvisioningExpects    []*gomock.Call0_1[*service44.Service]
-	unitStateExpects              []*gomock.Call0_1[*service47.LeadershipService]
-	unitlessExpects               []*gomock.Call0_1[*service46.WatchableService]
+	mock                       *MockModelDomainServices
+	agentExpects               []*gomock.Call0_1[*service26.WatchableService]
+	agentBinaryExpects         []*gomock.Call0_1[*service0.AgentBinaryService]
+	agentBinaryStoreExpects    []*gomock.Call0_1[*service0.AgentBinaryStore]
+	agentPasswordExpects       []*gomock.Call0_1[*service1.Service]
+	agentProvisionerExpects    []*gomock.Call0_1[*service2.Service]
+	annotationExpects          []*gomock.Call0_1[*service3.Service]
+	applicationExpects         []*gomock.Call0_1[*service4.WatchableService]
+	blockCommandExpects        []*gomock.Call0_1[*service6.Service]
+	blockDeviceExpects         []*gomock.Call0_1[*service7.WatchableService]
+	changeStreamExpects        []*gomock.Call0_1[*service8.Service]
+	cloudImageMetadataExpects  []*gomock.Call0_1[*service10.Service]
+	configExpects              []*gomock.Call0_1[*service27.WatchableService]
+	controllerUpgraderExpects  []*gomock.Call0_1[*service14.Service]
+	crossModelRelationExpects  []*gomock.Call0_1[*service16.WatchableService]
+	exportExpects              []*gomock.Call0_1[*service17.Service]
+	keyUpdaterExpects          []*gomock.Call0_1[*service21.WatchableService]
+	machineExpects             []*gomock.Call0_1[*service24.WatchableService]
+	modelInfoExpects           []*gomock.Call0_1[*service25.ProviderModelService]
+	modelMigrationExpects      []*gomock.Call0_1[*service29.WatchableService]
+	modelProviderExpects       []*gomock.Call0_1[*service30.Service]
+	modelSecretBackendExpects  []*gomock.Call0_1[*service41.ModelSecretBackendService]
+	networkExpects             []*gomock.Call0_1[*service31.WatchableService]
+	operationExpects           []*gomock.Call0_1[*service32.WatchableService]
+	portExpects                []*gomock.Call0_1[*service33.WatchableService]
+	provisioningExpects        []*gomock.Call0_1[*service34.Service]
+	proxyExpects               []*gomock.Call0_1[*service35.Service]
+	relationExpects            []*gomock.Call0_1[*service36.WatchableService]
+	removalExpects             []*gomock.Call0_1[*service37.WatchableService]
+	resolveExpects             []*gomock.Call0_1[*service38.WatchableService]
+	resourceExpects            []*gomock.Call0_1[*service39.Service]
+	sSHExpects                 []*gomock.Call0_1[*model0.WatchableService]
+	secretExpects              []*gomock.Call0_1[*service40.WatchableService]
+	statusExpects              []*gomock.Call0_1[*service42.LeadershipService]
+	storageExpects             []*gomock.Call0_1[*service43.Service]
+	storageProvisioningExpects []*gomock.Call0_1[*service44.Service]
+	unitStateExpects           []*gomock.Call0_1[*service47.LeadershipService]
+	unitlessExpects            []*gomock.Call0_1[*service46.WatchableService]
 }
 
 // NewMockModelDomainServices creates a new mock instance.
@@ -786,42 +822,6 @@ func (mr *MockModelDomainServicesMockRecorder) Export() *MockModelDomainServices
 
 // MockModelDomainServicesExportCall is the typed call wrapper for Export.
 type MockModelDomainServicesExportCall = gomock.Call0_1[*service17.Service]
-
-// KeyManager mocks base method.
-func (m *MockModelDomainServices) KeyManager() *service20.Service {
-	m.ctrl.T.Helper()
-	return gomock.Dispatch0_1(&m.recorder.keyManagerExpects, m.ctrl, m, "KeyManager")
-}
-
-// KeyManager indicates an expected call of KeyManager.
-func (mr *MockModelDomainServicesMockRecorder) KeyManager() *MockModelDomainServicesKeyManagerCall {
-	mr.mock.ctrl.T.Helper()
-	call := gomock.NewCall0_1[*service20.Service](mr.mock.ctrl.T, mr.mock, "KeyManager")
-	mr.keyManagerExpects = append(mr.keyManagerExpects, call)
-	mr.mock.ctrl.Track(call.Call)
-	return call
-}
-
-// MockModelDomainServicesKeyManagerCall is the typed call wrapper for KeyManager.
-type MockModelDomainServicesKeyManagerCall = gomock.Call0_1[*service20.Service]
-
-// KeyManagerWithImporter mocks base method.
-func (m *MockModelDomainServices) KeyManagerWithImporter() *service20.ImporterService {
-	m.ctrl.T.Helper()
-	return gomock.Dispatch0_1(&m.recorder.keyManagerWithImporterExpects, m.ctrl, m, "KeyManagerWithImporter")
-}
-
-// KeyManagerWithImporter indicates an expected call of KeyManagerWithImporter.
-func (mr *MockModelDomainServicesMockRecorder) KeyManagerWithImporter() *MockModelDomainServicesKeyManagerWithImporterCall {
-	mr.mock.ctrl.T.Helper()
-	call := gomock.NewCall0_1[*service20.ImporterService](mr.mock.ctrl.T, mr.mock, "KeyManagerWithImporter")
-	mr.keyManagerWithImporterExpects = append(mr.keyManagerWithImporterExpects, call)
-	mr.mock.ctrl.Track(call.Call)
-	return call
-}
-
-// MockModelDomainServicesKeyManagerWithImporterCall is the typed call wrapper for KeyManagerWithImporter.
-type MockModelDomainServicesKeyManagerWithImporterCall = gomock.Call0_1[*service20.ImporterService]
 
 // KeyUpdater mocks base method.
 func (m *MockModelDomainServices) KeyUpdater() *service21.WatchableService {

@@ -202,21 +202,13 @@ func (s *WatchableService) WatchAuthorisedKeysForMachine(
 		).Add(machineerrors.MachineNotFound)
 	}
 
-	modelId, err := s.st.GetModelUUID(ctx)
-	if err != nil {
-		return nil, errors.Errorf(
-			"getting model id for machine %q while watching authorized key changes: %w",
-			machineName, err,
-		)
-	}
-
 	return s.watcherFactory.NewNotifyWatcher(
 		ctx,
 		fmt.Sprintf("authorized keys watcher for %q", machineName),
 		eventsource.PredicateFilter(
 			s.st.NamespaceForWatchModelAuthorizationKeys(),
 			changestream.All,
-			eventsource.EqualsPredicate(modelId.String()),
+			nil,
 		),
 		eventsource.NamespaceFilter(
 			s.st.NamespaceForWatchUserAuthentication(),

@@ -104,7 +104,6 @@ func (s *keyManagerSuite) TestListKeysForUserNotFound(c *tc.C) {
 		s.authorizer,
 		s.blockChecker,
 		s.controllerUUID,
-		s.modelID,
 		s.apiUser,
 	)
 
@@ -155,7 +154,6 @@ func (s *keyManagerSuite) TestListKeys(c *tc.C) {
 		s.authorizer,
 		s.blockChecker,
 		s.controllerUUID,
-		s.modelID,
 		s.apiUser,
 	)
 
@@ -203,7 +201,6 @@ func (s *keyManagerSuite) TestListKeysFingerprintMode(c *tc.C) {
 		s.authorizer,
 		s.blockChecker,
 		s.controllerUUID,
-		s.modelID,
 		s.apiUser,
 	)
 
@@ -239,7 +236,6 @@ func (s *keyManagerSuite) TestListKeysNoPermission(c *tc.C) {
 		s.authorizer,
 		s.blockChecker,
 		s.controllerUUID,
-		s.modelID,
 		userTag,
 	)
 
@@ -276,7 +272,6 @@ func (s *keyManagerSuite) TestAddKeysForUser(c *tc.C) {
 		s.authorizer,
 		s.blockChecker,
 		s.controllerUUID,
-		s.modelID,
 		s.apiUser,
 	)
 
@@ -313,7 +308,6 @@ func (s *keyManagerSuite) TestAddKeysSuperUser(c *tc.C) {
 		s.authorizer,
 		s.blockChecker,
 		s.controllerUUID,
-		s.modelID,
 		s.apiUser,
 	)
 
@@ -324,8 +318,8 @@ func (s *keyManagerSuite) TestAddKeysSuperUser(c *tc.C) {
 
 // TestAddKeysModelAdmin is testing that model admin's have permissions to add
 // public keys.
-func (s *keyManagerSuite) TestAddKeysModelAdmin(c *tc.C) {
-	s.apiUser = names.NewUserTag("admin-" + names.NewModelTag(s.modelID.String()).String())
+func (s *keyManagerSuite) TestAddKeysControllerUser(c *tc.C) {
+	s.apiUser = names.NewUserTag("admin")
 	defer s.setupMocks(c).Finish()
 
 	userID := usertesting.GenUserUUID(c)
@@ -350,7 +344,6 @@ func (s *keyManagerSuite) TestAddKeysModelAdmin(c *tc.C) {
 		s.authorizer,
 		s.blockChecker,
 		s.controllerUUID,
-		s.modelID,
 		s.apiUser,
 	)
 
@@ -375,7 +368,6 @@ func (s *keyManagerSuite) TestAddKeysNonAuthorised(c *tc.C) {
 		s.authorizer,
 		s.blockChecker,
 		s.controllerUUID,
-		s.modelID,
 		s.apiUser,
 	)
 
@@ -403,7 +395,6 @@ func (s *keyManagerSuite) TestBlockAddKeys(c *tc.C) {
 		s.authorizer,
 		s.blockChecker,
 		s.controllerUUID,
-		s.modelID,
 		s.apiUser,
 	)
 
@@ -440,7 +431,6 @@ func (s *keyManagerSuite) TesDeleteKeys(c *tc.C) {
 		s.authorizer,
 		s.blockChecker,
 		s.controllerUUID,
-		s.modelID,
 		s.apiUser,
 	)
 
@@ -477,7 +467,6 @@ func (s *keyManagerSuite) TestDeleteKeysSuperUser(c *tc.C) {
 		s.authorizer,
 		s.blockChecker,
 		s.controllerUUID,
-		s.modelID,
 		s.apiUser,
 	)
 
@@ -488,8 +477,8 @@ func (s *keyManagerSuite) TestDeleteKeysSuperUser(c *tc.C) {
 
 // TestDeleteKeysModelAdmin is asserting that model admins can removed public
 // ssh keys from the model.
-func (s *keyManagerSuite) TestDeleteKeysModelAdmin(c *tc.C) {
-	s.apiUser = names.NewUserTag("admin" + names.NewModelTag(s.modelID.String()).String())
+func (s *keyManagerSuite) TestDeleteKeysControllerUser(c *tc.C) {
+	s.apiUser = names.NewUserTag("admin")
 	defer s.setupMocks(c).Finish()
 
 	userID := usertesting.GenUserUUID(c)
@@ -514,7 +503,6 @@ func (s *keyManagerSuite) TestDeleteKeysModelAdmin(c *tc.C) {
 		s.authorizer,
 		s.blockChecker,
 		s.controllerUUID,
-		s.modelID,
 		s.apiUser,
 	)
 
@@ -540,7 +528,6 @@ func (s *keyManagerSuite) TestDeleteKeysNonAuthorised(c *tc.C) {
 		s.authorizer,
 		s.blockChecker,
 		s.controllerUUID,
-		s.modelID,
 		s.apiUser,
 	)
 
@@ -569,7 +556,6 @@ func (s *keyManagerSuite) TestBlockDeleteKeys(c *tc.C) {
 		s.authorizer,
 		s.blockChecker,
 		s.controllerUUID,
-		s.modelID,
 		s.apiUser,
 	)
 

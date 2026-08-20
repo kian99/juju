@@ -14,7 +14,6 @@ import (
 	url "net/url"
 
 	gomock "github.com/canonical/gomock/gomock"
-	model "github.com/juju/juju/core/model"
 	ssh "github.com/juju/juju/core/ssh"
 	user "github.com/juju/juju/core/user"
 	keymanager "github.com/juju/juju/domain/keymanager"
@@ -72,13 +71,12 @@ type MockState struct {
 
 // MockStateMockRecorder is the mock recorder for MockState.
 type MockStateMockRecorder struct {
-	mock                            *MockState
-	addPublicKeysForUserExpects     []*gomock.Call4_1[context.Context, model.UUID, user.UUID, []keymanager.PublicKey, error]
-	deletePublicKeysForModelExpects []*gomock.Call2_1[context.Context, model.UUID, error]
-	deletePublicKeysForUserExpects  []*gomock.Call4_1[context.Context, model.UUID, user.UUID, []string, error]
-	ensurePublicKeysForUserExpects  []*gomock.Call4_1[context.Context, model.UUID, user.UUID, []keymanager.PublicKey, error]
-	getAllUsersPublicKeysExpects    []*gomock.Call2_2[context.Context, model.UUID, map[user.Name][]string, error]
-	getPublicKeysForUserExpects     []*gomock.Call3_2[context.Context, model.UUID, user.UUID, []ssh.PublicKey, error]
+	mock                           *MockState
+	addPublicKeysForUserExpects    []*gomock.Call3_1[context.Context, user.UUID, []keymanager.PublicKey, error]
+	deletePublicKeysForUserExpects []*gomock.Call3_1[context.Context, user.UUID, []string, error]
+	ensurePublicKeysForUserExpects []*gomock.Call3_1[context.Context, user.UUID, []keymanager.PublicKey, error]
+	getAllUsersPublicKeysExpects   []*gomock.Call1_2[context.Context, map[user.Name][]string, error]
+	getPublicKeysForUserExpects    []*gomock.Call2_2[context.Context, user.UUID, []ssh.PublicKey, error]
 }
 
 // NewMockState creates a new mock instance.
@@ -94,109 +92,91 @@ func (m *MockState) EXPECT() *MockStateMockRecorder {
 }
 
 // AddPublicKeysForUser mocks base method.
-func (m *MockState) AddPublicKeysForUser(arg0 context.Context, arg1 model.UUID, arg2 user.UUID, arg3 []keymanager.PublicKey) error {
+func (m *MockState) AddPublicKeysForUser(arg0 context.Context, arg1 user.UUID, arg2 []keymanager.PublicKey) error {
 	m.ctrl.T.Helper()
-	return gomock.Dispatch4_1(&m.recorder.addPublicKeysForUserExpects, m.ctrl, m, "AddPublicKeysForUser", arg0, arg1, arg2, arg3)
+	return gomock.Dispatch3_1(&m.recorder.addPublicKeysForUserExpects, m.ctrl, m, "AddPublicKeysForUser", arg0, arg1, arg2)
 }
 
 // AddPublicKeysForUser indicates an expected call of AddPublicKeysForUser.
-func (mr *MockStateMockRecorder) AddPublicKeysForUser(arg0, arg1, arg2, arg3 any) *MockStateAddPublicKeysForUserCall {
+func (mr *MockStateMockRecorder) AddPublicKeysForUser(arg0, arg1, arg2 any) *MockStateAddPublicKeysForUserCall {
 	mr.mock.ctrl.T.Helper()
-	call := gomock.NewCall4_1[context.Context, model.UUID, user.UUID, []keymanager.PublicKey, error](mr.mock.ctrl.T, mr.mock, "AddPublicKeysForUser", gomock.EnsureMatcher(arg0), gomock.EnsureMatcher(arg1), gomock.EnsureMatcher(arg2), gomock.EnsureMatcher(arg3))
+	call := gomock.NewCall3_1[context.Context, user.UUID, []keymanager.PublicKey, error](mr.mock.ctrl.T, mr.mock, "AddPublicKeysForUser", gomock.EnsureMatcher(arg0), gomock.EnsureMatcher(arg1), gomock.EnsureMatcher(arg2))
 	mr.addPublicKeysForUserExpects = append(mr.addPublicKeysForUserExpects, call)
 	mr.mock.ctrl.Track(call.Call)
 	return call
 }
 
 // MockStateAddPublicKeysForUserCall is the typed call wrapper for AddPublicKeysForUser.
-type MockStateAddPublicKeysForUserCall = gomock.Call4_1[context.Context, model.UUID, user.UUID, []keymanager.PublicKey, error]
-
-// DeletePublicKeysForModel mocks base method.
-func (m *MockState) DeletePublicKeysForModel(arg0 context.Context, arg1 model.UUID) error {
-	m.ctrl.T.Helper()
-	return gomock.Dispatch2_1(&m.recorder.deletePublicKeysForModelExpects, m.ctrl, m, "DeletePublicKeysForModel", arg0, arg1)
-}
-
-// DeletePublicKeysForModel indicates an expected call of DeletePublicKeysForModel.
-func (mr *MockStateMockRecorder) DeletePublicKeysForModel(arg0, arg1 any) *MockStateDeletePublicKeysForModelCall {
-	mr.mock.ctrl.T.Helper()
-	call := gomock.NewCall2_1[context.Context, model.UUID, error](mr.mock.ctrl.T, mr.mock, "DeletePublicKeysForModel", gomock.EnsureMatcher(arg0), gomock.EnsureMatcher(arg1))
-	mr.deletePublicKeysForModelExpects = append(mr.deletePublicKeysForModelExpects, call)
-	mr.mock.ctrl.Track(call.Call)
-	return call
-}
-
-// MockStateDeletePublicKeysForModelCall is the typed call wrapper for DeletePublicKeysForModel.
-type MockStateDeletePublicKeysForModelCall = gomock.Call2_1[context.Context, model.UUID, error]
+type MockStateAddPublicKeysForUserCall = gomock.Call3_1[context.Context, user.UUID, []keymanager.PublicKey, error]
 
 // DeletePublicKeysForUser mocks base method.
-func (m *MockState) DeletePublicKeysForUser(arg0 context.Context, arg1 model.UUID, arg2 user.UUID, arg3 []string) error {
+func (m *MockState) DeletePublicKeysForUser(arg0 context.Context, arg1 user.UUID, arg2 []string) error {
 	m.ctrl.T.Helper()
-	return gomock.Dispatch4_1(&m.recorder.deletePublicKeysForUserExpects, m.ctrl, m, "DeletePublicKeysForUser", arg0, arg1, arg2, arg3)
+	return gomock.Dispatch3_1(&m.recorder.deletePublicKeysForUserExpects, m.ctrl, m, "DeletePublicKeysForUser", arg0, arg1, arg2)
 }
 
 // DeletePublicKeysForUser indicates an expected call of DeletePublicKeysForUser.
-func (mr *MockStateMockRecorder) DeletePublicKeysForUser(arg0, arg1, arg2, arg3 any) *MockStateDeletePublicKeysForUserCall {
+func (mr *MockStateMockRecorder) DeletePublicKeysForUser(arg0, arg1, arg2 any) *MockStateDeletePublicKeysForUserCall {
 	mr.mock.ctrl.T.Helper()
-	call := gomock.NewCall4_1[context.Context, model.UUID, user.UUID, []string, error](mr.mock.ctrl.T, mr.mock, "DeletePublicKeysForUser", gomock.EnsureMatcher(arg0), gomock.EnsureMatcher(arg1), gomock.EnsureMatcher(arg2), gomock.EnsureMatcher(arg3))
+	call := gomock.NewCall3_1[context.Context, user.UUID, []string, error](mr.mock.ctrl.T, mr.mock, "DeletePublicKeysForUser", gomock.EnsureMatcher(arg0), gomock.EnsureMatcher(arg1), gomock.EnsureMatcher(arg2))
 	mr.deletePublicKeysForUserExpects = append(mr.deletePublicKeysForUserExpects, call)
 	mr.mock.ctrl.Track(call.Call)
 	return call
 }
 
 // MockStateDeletePublicKeysForUserCall is the typed call wrapper for DeletePublicKeysForUser.
-type MockStateDeletePublicKeysForUserCall = gomock.Call4_1[context.Context, model.UUID, user.UUID, []string, error]
+type MockStateDeletePublicKeysForUserCall = gomock.Call3_1[context.Context, user.UUID, []string, error]
 
 // EnsurePublicKeysForUser mocks base method.
-func (m *MockState) EnsurePublicKeysForUser(arg0 context.Context, arg1 model.UUID, arg2 user.UUID, arg3 []keymanager.PublicKey) error {
+func (m *MockState) EnsurePublicKeysForUser(arg0 context.Context, arg1 user.UUID, arg2 []keymanager.PublicKey) error {
 	m.ctrl.T.Helper()
-	return gomock.Dispatch4_1(&m.recorder.ensurePublicKeysForUserExpects, m.ctrl, m, "EnsurePublicKeysForUser", arg0, arg1, arg2, arg3)
+	return gomock.Dispatch3_1(&m.recorder.ensurePublicKeysForUserExpects, m.ctrl, m, "EnsurePublicKeysForUser", arg0, arg1, arg2)
 }
 
 // EnsurePublicKeysForUser indicates an expected call of EnsurePublicKeysForUser.
-func (mr *MockStateMockRecorder) EnsurePublicKeysForUser(arg0, arg1, arg2, arg3 any) *MockStateEnsurePublicKeysForUserCall {
+func (mr *MockStateMockRecorder) EnsurePublicKeysForUser(arg0, arg1, arg2 any) *MockStateEnsurePublicKeysForUserCall {
 	mr.mock.ctrl.T.Helper()
-	call := gomock.NewCall4_1[context.Context, model.UUID, user.UUID, []keymanager.PublicKey, error](mr.mock.ctrl.T, mr.mock, "EnsurePublicKeysForUser", gomock.EnsureMatcher(arg0), gomock.EnsureMatcher(arg1), gomock.EnsureMatcher(arg2), gomock.EnsureMatcher(arg3))
+	call := gomock.NewCall3_1[context.Context, user.UUID, []keymanager.PublicKey, error](mr.mock.ctrl.T, mr.mock, "EnsurePublicKeysForUser", gomock.EnsureMatcher(arg0), gomock.EnsureMatcher(arg1), gomock.EnsureMatcher(arg2))
 	mr.ensurePublicKeysForUserExpects = append(mr.ensurePublicKeysForUserExpects, call)
 	mr.mock.ctrl.Track(call.Call)
 	return call
 }
 
 // MockStateEnsurePublicKeysForUserCall is the typed call wrapper for EnsurePublicKeysForUser.
-type MockStateEnsurePublicKeysForUserCall = gomock.Call4_1[context.Context, model.UUID, user.UUID, []keymanager.PublicKey, error]
+type MockStateEnsurePublicKeysForUserCall = gomock.Call3_1[context.Context, user.UUID, []keymanager.PublicKey, error]
 
 // GetAllUsersPublicKeys mocks base method.
-func (m *MockState) GetAllUsersPublicKeys(arg0 context.Context, arg1 model.UUID) (map[user.Name][]string, error) {
+func (m *MockState) GetAllUsersPublicKeys(arg0 context.Context) (map[user.Name][]string, error) {
 	m.ctrl.T.Helper()
-	return gomock.Dispatch2_2(&m.recorder.getAllUsersPublicKeysExpects, m.ctrl, m, "GetAllUsersPublicKeys", arg0, arg1)
+	return gomock.Dispatch1_2(&m.recorder.getAllUsersPublicKeysExpects, m.ctrl, m, "GetAllUsersPublicKeys", arg0)
 }
 
 // GetAllUsersPublicKeys indicates an expected call of GetAllUsersPublicKeys.
-func (mr *MockStateMockRecorder) GetAllUsersPublicKeys(arg0, arg1 any) *MockStateGetAllUsersPublicKeysCall {
+func (mr *MockStateMockRecorder) GetAllUsersPublicKeys(arg0 any) *MockStateGetAllUsersPublicKeysCall {
 	mr.mock.ctrl.T.Helper()
-	call := gomock.NewCall2_2[context.Context, model.UUID, map[user.Name][]string, error](mr.mock.ctrl.T, mr.mock, "GetAllUsersPublicKeys", gomock.EnsureMatcher(arg0), gomock.EnsureMatcher(arg1))
+	call := gomock.NewCall1_2[context.Context, map[user.Name][]string, error](mr.mock.ctrl.T, mr.mock, "GetAllUsersPublicKeys", gomock.EnsureMatcher(arg0))
 	mr.getAllUsersPublicKeysExpects = append(mr.getAllUsersPublicKeysExpects, call)
 	mr.mock.ctrl.Track(call.Call)
 	return call
 }
 
 // MockStateGetAllUsersPublicKeysCall is the typed call wrapper for GetAllUsersPublicKeys.
-type MockStateGetAllUsersPublicKeysCall = gomock.Call2_2[context.Context, model.UUID, map[user.Name][]string, error]
+type MockStateGetAllUsersPublicKeysCall = gomock.Call1_2[context.Context, map[user.Name][]string, error]
 
 // GetPublicKeysForUser mocks base method.
-func (m *MockState) GetPublicKeysForUser(arg0 context.Context, arg1 model.UUID, arg2 user.UUID) ([]ssh.PublicKey, error) {
+func (m *MockState) GetPublicKeysForUser(arg0 context.Context, arg1 user.UUID) ([]ssh.PublicKey, error) {
 	m.ctrl.T.Helper()
-	return gomock.Dispatch3_2(&m.recorder.getPublicKeysForUserExpects, m.ctrl, m, "GetPublicKeysForUser", arg0, arg1, arg2)
+	return gomock.Dispatch2_2(&m.recorder.getPublicKeysForUserExpects, m.ctrl, m, "GetPublicKeysForUser", arg0, arg1)
 }
 
 // GetPublicKeysForUser indicates an expected call of GetPublicKeysForUser.
-func (mr *MockStateMockRecorder) GetPublicKeysForUser(arg0, arg1, arg2 any) *MockStateGetPublicKeysForUserCall {
+func (mr *MockStateMockRecorder) GetPublicKeysForUser(arg0, arg1 any) *MockStateGetPublicKeysForUserCall {
 	mr.mock.ctrl.T.Helper()
-	call := gomock.NewCall3_2[context.Context, model.UUID, user.UUID, []ssh.PublicKey, error](mr.mock.ctrl.T, mr.mock, "GetPublicKeysForUser", gomock.EnsureMatcher(arg0), gomock.EnsureMatcher(arg1), gomock.EnsureMatcher(arg2))
+	call := gomock.NewCall2_2[context.Context, user.UUID, []ssh.PublicKey, error](mr.mock.ctrl.T, mr.mock, "GetPublicKeysForUser", gomock.EnsureMatcher(arg0), gomock.EnsureMatcher(arg1))
 	mr.getPublicKeysForUserExpects = append(mr.getPublicKeysForUserExpects, call)
 	mr.mock.ctrl.Track(call.Call)
 	return call
 }
 
 // MockStateGetPublicKeysForUserCall is the typed call wrapper for GetPublicKeysForUser.
-type MockStateGetPublicKeysForUserCall = gomock.Call3_2[context.Context, model.UUID, user.UUID, []ssh.PublicKey, error]
+type MockStateGetPublicKeysForUserCall = gomock.Call2_2[context.Context, user.UUID, []ssh.PublicKey, error]

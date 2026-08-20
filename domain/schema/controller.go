@@ -20,6 +20,7 @@ import (
 //go:generate go run ./../../generate/triggergen -db=controller -destination=./controller/triggers/secret-triggers.gen.go -package=triggers -tables=secret_backend_rotation,model_secret_backend
 //go:generate go run ./../../generate/triggergen -db=controller -destination=./controller/triggers/model-triggers.gen.go -package=triggers -tables=model
 //go:generate go run ./../../generate/triggergen -db=controller -destination=./controller/triggers/model-authorized-keys-triggers.gen.go -package=triggers -tables=model_authorized_keys
+//go:generate go run ./../../generate/triggergen -db=controller -destination=./controller/triggers/user-public-ssh-key-triggers.gen.go -package=triggers -tables=user_public_ssh_key
 //go:generate go run ./../../generate/triggergen -db=controller -destination=./controller/triggers/user-authentication-triggers.gen.go -package=triggers -tables=user_authentication
 //go:generate go run ./../../generate/triggergen -db=controller -destination=./controller/triggers/logging-triggers.gen.go -package=triggers -tables=logging_loki_config
 //go:generate go run ./../../generate/triggergen -db=controller -destination=./controller/triggers/tracing-triggers.gen.go -package=triggers -tables=workload_tracing_config
@@ -53,6 +54,7 @@ const (
 	tableModelMigrationExportMinionSync
 	tableWorkloadTracingConfig
 	tableModelDatabaseDeletion
+	tableUserPublicSSHKey
 )
 
 // controllerPostPatchFilesByVersion is used to categorise the post patch files
@@ -105,12 +107,12 @@ func ControllerDDLForVersion(version semversion.Number) *schema.Schema {
 		triggers.ChangeLogTriggersForSecretBackendRotation("backend_uuid", tableSecretBackendRotation),
 		triggers.ChangeLogTriggersForModelSecretBackend("model_uuid", tableModelSecretBackend),
 		triggers.ChangeLogTriggersForModel("uuid", tableModelMetadata),
-		triggers.ChangeLogTriggersForModelAuthorizedKeys("model_uuid", tableModelAuthorizedKeys),
 		triggers.ChangeLogTriggersForUserAuthentication("user_uuid", tableUserAuthentication),
 		triggers.ChangeLogTriggersForObjectStoreBackend("uuid", tableObjectStoreBackend),
 		triggers.ChangeLogTriggersForLoggingLokiConfig("uuid", tableLoggingLokiConfig),
 		triggers.ChangeLogTriggersForWorkloadTracingConfig("key", tableWorkloadTracingConfig),
 		triggers.ChangeLogTriggersForModelDatabaseDeletion("namespace", tableModelDatabaseDeletion),
+		triggers.ChangeLogTriggersForUserPublicSSHKey("user_uuid", tableUserPublicSSHKey),
 	)
 
 	// Generic triggers.

@@ -247,7 +247,7 @@ func (s *controllerImportSuite) TestImportModelHappyPath(c *tc.C) {
 	// bob's authorized key landed; carol's was skipped.
 	bobUUID, err := accessSvc.GetUserUUIDByName(c.Context(), bobName)
 	c.Assert(err, tc.ErrorIsNil)
-	keyManagerSvc := keymanagerservice.NewService(modelUUID, keymanagerstate.NewState(controllerFactory))
+	keyManagerSvc := keymanagerservice.NewService(keymanagerstate.NewState(controllerFactory))
 	keys, err := keyManagerSvc.ListPublicKeysForUser(c.Context(), bobUUID)
 	c.Assert(err, tc.ErrorIsNil)
 	c.Check(keys, tc.HasLen, 1)

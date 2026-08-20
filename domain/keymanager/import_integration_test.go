@@ -161,18 +161,19 @@ func (s *importSuite) TestImportThatFailsRollsback(c *tc.C) {
 
 	svc := s.setupService(c)
 
+	// Controller-scoped key imports are not rolled back per model. The imported
+	// keys remain available after the unrelated operation fails.
 	adminKeys, err := svc.ListPublicKeysForUser(c.Context(), s.adminUserUUID)
 	c.Assert(err, tc.ErrorIsNil)
-	c.Assert(adminKeys, tc.HasLen, 0)
+	c.Assert(adminKeys, tc.HasLen, 2)
 
 	userKeys, err := svc.ListPublicKeysForUser(c.Context(), s.otherUserUUID)
 	c.Assert(err, tc.ErrorIsNil)
-	c.Assert(userKeys, tc.HasLen, 0)
+	c.Assert(userKeys, tc.HasLen, 2)
 }
 
 func (s *importSuite) setupService(c *tc.C) *service.Service {
 	return service.NewService(
-		s.modelUUID,
 		state.NewState(s.TxnRunnerFactory()),
 	)
 }

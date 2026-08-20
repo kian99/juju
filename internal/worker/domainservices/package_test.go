@@ -4,8 +4,6 @@
 package domainservices
 
 import (
-	"net/http"
-
 	"github.com/canonical/gomock/gomock"
 	"github.com/juju/clock"
 	"github.com/juju/tc"
@@ -22,7 +20,6 @@ import (
 	domainservices "github.com/juju/juju/domain/services"
 	loggertesting "github.com/juju/juju/internal/logger/testing"
 	"github.com/juju/juju/internal/services"
-	sshimporter "github.com/juju/juju/internal/ssh/importer"
 )
 
 //go:generate go run github.com/canonical/gomock/mockgen -package domainservices -destination domainservices_mock_test.go github.com/juju/juju/internal/services ControllerDomainServices,ModelDomainServices,DomainServices,DomainServicesGetter
@@ -69,8 +66,6 @@ type baseSuite struct {
 	leaseManager            *MockManager
 	leaseManagerGetter      *MockLeaseManagerGetter
 	modelLeaseManagerGetter *MockModelLeaseManagerGetter
-
-	publicKeyImporter *sshimporter.Importer
 }
 
 func (s *baseSuite) setupMocks(c *tc.C) *gomock.Controller {
@@ -108,8 +103,6 @@ func (s *baseSuite) setupMocks(c *tc.C) *gomock.Controller {
 	s.leaseManagerGetter = NewMockLeaseManagerGetter(ctrl)
 	s.modelLeaseManagerGetter = NewMockModelLeaseManagerGetter(ctrl)
 
-	s.publicKeyImporter = sshimporter.NewImporter(&http.Client{})
-
 	c.Cleanup(func() {
 		s.logger = nil
 		s.loggerContext = nil
@@ -143,7 +136,6 @@ func (s *baseSuite) setupMocks(c *tc.C) *gomock.Controller {
 		s.leaseManagerGetter = nil
 		s.modelLeaseManagerGetter = nil
 
-		s.publicKeyImporter = nil
 	})
 
 	return ctrl
@@ -158,7 +150,6 @@ func NewModelDomainServices(
 	namespacedObjectStoreGetter objectstore.NamespacedObjectStoreGetter,
 	modelObjectStoreGetter objectstore.ModelObjectStoreGetter,
 	storageRegistry storage.ModelStorageRegistryGetter,
-	publicKeyImporter domainservices.PublicKeyImporter,
 	leaseManager lease.ModelLeaseManagerGetter,
 	clusterDescriber coredatabase.ClusterDescriber,
 	simpleStreamsClient corehttp.HTTPClient,
@@ -174,7 +165,6 @@ func NewModelDomainServices(
 		namespacedObjectStoreGetter,
 		modelObjectStoreGetter,
 		storageRegistry,
-		publicKeyImporter,
 		leaseManager,
 		clusterDescriber,
 		simpleStreamsClient,

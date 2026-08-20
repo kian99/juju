@@ -43,13 +43,8 @@ type importServiceGetterFunc func(coremodel.UUID) ImportService
 // ImportService represents the service methods needed for importing the
 // authorized keys of a model during migration.
 type ImportService interface {
-	// AddPublicKeysForUser is responsible for adding public keys for a user to a
-	// model.
+	// AddPublicKeysForUser adds public keys for a user to the controller.
 	AddPublicKeysForUser(context.Context, user.UUID, ...string) error
-
-	// DeletePublicKeysForModel removes all of the public keys associated with the
-	// model.
-	DeleteKeysForModel(context.Context) error
 }
 
 // UserService represents the service methods needed for finding users when
@@ -76,11 +71,8 @@ func RegisterImport(coordinator Coordinator, clock clock.Clock, logger logger.Lo
 // Setup the import operation, this will ensure the service is created and ready
 // to be used.
 func (i *importOperation) Setup(scope modelmigration.Scope) error {
-	i.serviceGetter = func(modelUUID coremodel.UUID) ImportService {
-		return service.NewService(
-			modelUUID,
-			state.NewState(scope.ControllerDB()),
-		)
+	i.serviceGetter = func(coremodel.UUID) ImportService {
+		return service.NewService(state.NewState(scope.ControllerDB()))
 	}
 	i.userService = accessservice.NewUserService(accessstate.NewUserState(scope.ControllerDB(), i.clock), i.clock)
 	return nil
@@ -133,14 +125,7 @@ func (i *importOperation) Execute(
 			)
 		}
 
-		modelUUID := coremodel.UUID(model.UUID())
-		if err := modelUUID.Validate(); err != nil {
-			return errors.Errorf(
-				"importing authorized keys for model %q: %w", modelUUID, err,
-			)
-		}
-
-		err = i.serviceGetter(modelUUID).AddPublicKeysForUser(ctx, user.UUID, uak.AuthorizedKeys()...)
+		err = i.serviceGetter(coremodel.UUID(model.UUID())).AddPublicKeysForUser(ctx, user.UUID, uak.AuthorizedKeys()...)
 		if err != nil {
 			return errors.Errorf(
 				"importing authorized keys for user %q: %w",
@@ -217,14 +202,7 @@ func (i *importOperation) executeModelConfigAuthorizedKeys(
 		)
 	}
 
-	modelUUID := coremodel.UUID(model.UUID())
-	if err := modelUUID.Validate(); err != nil {
-		return errors.Errorf(
-			"importing authorized keys for model %q: %w", modelUUID, err,
-		)
-	}
-
-	err = i.serviceGetter(modelUUID).AddPublicKeysForUser(
+	err = i.serviceGetter(coremodel.UUID(model.UUID())).AddPublicKeysForUser(
 		ctx,
 		adminUser.UUID,
 		cleansedKeys...,
@@ -240,21 +218,6 @@ func (i *importOperation) executeModelConfigAuthorizedKeys(
 
 // Rollback is called if the operation fails.
 func (i *importOperation) Rollback(ctx context.Context, model description.Model) error {
-	modelUUID := coremodel.UUID(model.UUID())
-	if err := modelUUID.Validate(); err != nil {
-		return errors.Errorf(
-			"importing authorized keys for model %q: %w", modelUUID, err,
-		)
-	}
-
-	err := i.serviceGetter(modelUUID).DeleteKeysForModel(ctx)
-	if err != nil {
-		return errors.Errorf(
-			"rolling back imported authorized keys for model %q: %w",
-			modelUUID,
-			err,
-		)
-	}
 	return nil
 }
 

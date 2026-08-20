@@ -140,8 +140,6 @@ func (s *importSuite) TestRollback(c *tc.C) {
 		},
 	})
 
-	s.service.EXPECT().DeleteKeysForModel(gomock.Any()).Return(nil)
-
 	op := s.newImportOperation()
 	err := op.Rollback(c.Context(), model)
 	c.Check(err, tc.ErrorIsNil)

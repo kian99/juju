@@ -122,7 +122,7 @@ func (s *State) NamespaceForWatchUserAuthentication() string {
 // NamespaceForWatchModelAuthorizationKeys returns the namespace used to
 // monitor authorization keys for the current model.
 func (s *State) NamespaceForWatchModelAuthorizationKeys() string {
-	return "model_authorized_keys"
+	return "user_public_ssh_key"
 }
 
 // NewState constructs a new state for interacting with the underlying
