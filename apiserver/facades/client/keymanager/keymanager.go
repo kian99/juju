@@ -49,7 +49,7 @@ func (api *KeyManagerAPI) checkCanRead(ctx context.Context) error {
 func (api *KeyManagerAPI) checkCanWrite(ctx context.Context) error {
 	return api.authorizer.HasPermission(
 		ctx,
-		permission.SuperuserAccess,
+		permission.LoginAccess,
 		names.NewControllerTag(api.controllerUUID),
 	)
 }

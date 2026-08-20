@@ -278,50 +278,14 @@ func (s *keyManagerSuite) TestAddKeysForUser(c *tc.C) {
 	c.Check(res, tc.DeepEquals, params.ErrorResults{})
 }
 
-// TestAddKeysSuperUser is testing that a user with superuser permissions can
-// add keys to the model.
-func (s *keyManagerSuite) TestAddKeysSuperUser(c *tc.C) {
-	s.apiUser = names.NewUserTag("superuser-fred")
+// TestAddKeysLoginUser is testing that a user with login permissions can add
+// keys to the controller.
+func (s *keyManagerSuite) TestAddKeysLoginUser(c *tc.C) {
+	s.apiUser = names.NewUserTag("login-fred")
 	defer s.setupMocks(c).Finish()
 
 	userID := usertesting.GenUserUUID(c)
-	s.userService.EXPECT().GetUserByName(gomock.Any(), usertesting.GenNewName(c, "superuser-fred")).Return(coreuser.User{
-		UUID: userID,
-	}, nil)
-
-	s.keyManagerService.EXPECT().AddPublicKeysForUser(
-		gomock.Any(),
-		userID,
-		testingPublicKeys,
-	).Return(nil)
-	s.blockChecker.EXPECT().ChangeAllowed(gomock.Any()).Return(nil)
-
-	args := params.ModifyUserSSHKeys{
-		Keys: testingPublicKeys,
-	}
-
-	api := newKeyManagerAPI(
-		s.keyManagerService,
-		s.userService,
-		s.authorizer,
-		s.blockChecker,
-		s.controllerUUID,
-		s.apiUser,
-	)
-
-	res, err := api.AddKeys(c.Context(), args)
-	c.Check(err, tc.ErrorIsNil)
-	c.Check(res, tc.DeepEquals, params.ErrorResults{})
-}
-
-// TestAddKeysControllerUser is testing that controller users have permissions to add
-// public keys.
-func (s *keyManagerSuite) TestAddKeysControllerUser(c *tc.C) {
-	s.apiUser = names.NewUserTag("admin")
-	defer s.setupMocks(c).Finish()
-
-	userID := usertesting.GenUserUUID(c)
-	s.userService.EXPECT().GetUserByName(gomock.Any(), coreuser.NameFromTag(s.apiUser)).Return(coreuser.User{
+	s.userService.EXPECT().GetUserByName(gomock.Any(), usertesting.GenNewName(c, "login-fred")).Return(coreuser.User{
 		UUID: userID,
 	}, nil)
 
@@ -438,14 +402,14 @@ func (s *keyManagerSuite) TesDeleteKeys(c *tc.C) {
 	c.Check(res, tc.DeepEquals, params.ErrorResults{})
 }
 
-// TestDeleteKeysSuperUser is asserting that a super user can remove public ssh
-// keys for the controller.
-func (s *keyManagerSuite) TestDeleteKeysSuperUser(c *tc.C) {
-	s.apiUser = names.NewUserTag("superuser-fred")
+// TestDeleteKeysLoginUser is asserting that a user with login permissions can
+// remove public SSH keys from the controller.
+func (s *keyManagerSuite) TestDeleteKeysLoginUser(c *tc.C) {
+	s.apiUser = names.NewUserTag("login-fred")
 	defer s.setupMocks(c).Finish()
 
 	userID := usertesting.GenUserUUID(c)
-	s.userService.EXPECT().GetUserByName(gomock.Any(), usertesting.GenNewName(c, "superuser-fred")).Return(coreuser.User{
+	s.userService.EXPECT().GetUserByName(gomock.Any(), usertesting.GenNewName(c, "login-fred")).Return(coreuser.User{
 		UUID: userID,
 	}, nil)
 
