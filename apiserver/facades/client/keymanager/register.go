@@ -17,7 +17,7 @@ import (
 
 // Register is called to expose a package of facades onto a given registry.
 func Register(registry facade.FacadeRegistry) {
-	registry.MustRegisterForMultiModel("KeyManager", 1, func(stdCtx context.Context, ctx facade.MultiModelContext) (facade.Facade, error) {
+	registry.MustRegister("KeyManager", 1, func(stdCtx context.Context, ctx facade.ModelContext) (facade.Facade, error) {
 		facade, err := makeFacadeV1(stdCtx, ctx)
 		if err != nil {
 			return nil, fmt.Errorf("cannot make keymanager facade: %w", err)
@@ -26,7 +26,7 @@ func Register(registry facade.FacadeRegistry) {
 	}, reflect.TypeFor[*KeyManagerAPI]())
 }
 
-func makeFacadeV1(stdCtx context.Context, ctx facade.MultiModelContext) (*KeyManagerAPI, error) {
+func makeFacadeV1(stdCtx context.Context, ctx facade.ModelContext) (*KeyManagerAPI, error) {
 	authorizer := ctx.Auth()
 	if !authorizer.AuthClient() {
 		return nil, apiservererrors.ErrPerm
@@ -60,9 +60,8 @@ func newKeyManagerAPI(
 	authorizer facade.Authorizer,
 	check BlockChecker,
 	controllerUUID string,
-	args ...any,
+	authedUser names.UserTag,
 ) *KeyManagerAPI {
-	authedUser := args[len(args)-1].(names.UserTag)
 	return &KeyManagerAPI{
 		keyManagerService: keyManagerService,
 		userService:       userService,

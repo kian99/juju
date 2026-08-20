@@ -20,8 +20,17 @@ import (
 	importererrors "github.com/juju/juju/internal/ssh/importer/errors"
 )
 
-// PublicKeyImporter fetches public keys from a well-known external source.
+// PublicKeyImporter describes a service that is capable of fetching and
+// providing public keys for a subject from a set of well known sources that
+// don't need to be understood by this service.
 type PublicKeyImporter interface {
+	// FetchPublicKeysForSubject is responsible for gathering all of the
+	// public keys available for a specified subject.
+	// The following errors can be expected:
+	// - [importererrors.NoResolver] when there is no import resolver for the
+	//   subject schema.
+	// - [importererrors.SubjectNotFound] when the resolver has reported that no
+	//   subject exists.
 	FetchPublicKeysForSubject(context.Context, *url.URL) ([]string, error)
 }
 
@@ -38,10 +47,24 @@ type ImporterService struct {
 
 // State provides controller-scoped persistence for user public SSH keys.
 type State interface {
+	// AddPublicKeysForUser adds one or more SSH public keys for a user to the
+	// controller.
 	AddPublicKeysForUser(context.Context, user.UUID, []keymanager.PublicKey) error
+
+	// EnsurePublicKeysForUser adds the given keys for a user, skipping keys that
+	// already exist.
 	EnsurePublicKeysForUser(context.Context, user.UUID, []keymanager.PublicKey) error
+
+	// GetPublicKeysForUser returns all public keys for a user. If the user does
+	// not exist, no error is returned.
 	GetPublicKeysForUser(context.Context, user.UUID) ([]coressh.PublicKey, error)
+
+	// GetAllUsersPublicKeys returns the public keys in the controller grouped by
+	// user name. This is useful for building a view during controller migration.
 	GetAllUsersPublicKeys(context.Context) (map[user.Name][]string, error)
+
+	// DeletePublicKeysForUser removes keys identified by fingerprint, comment,
+	// or public key data.
 	DeletePublicKeysForUser(context.Context, user.UUID, []string) error
 }
 
@@ -60,7 +83,16 @@ func NewImporterService(keyImporter PublicKeyImporter, state State) *ImporterSer
 	}
 }
 
-// AddPublicKeysForUser adds public keys for a user to the controller.
+// AddPublicKeysForUser is responsible for adding public keys for a user to the
+// controller. The following errors can be expected:
+//   - [errors.NotValid] when the user uuid is not valid
+//   - [github.com/juju/juju/domain/access/errors.UserNotFound] when the user does
+//     not exist.
+//   - [keyerrors.InvalidPublicKey] when a public key fails validation.
+//   - [keyerrors.ReservedCommentViolation] when a key being added contains a
+//     comment string that is reserved.
+//   - [keyerrors.PublicKeyAlreadyExists] when a public key being added for a user
+//     already exists.
 func (s *Service) AddPublicKeysForUser(ctx context.Context, userUUID user.UUID, keys ...string) error {
 	ctx, span := trace.Start(ctx, trace.NameFromFunc())
 	defer span.End()
@@ -91,6 +123,10 @@ func (s *Service) AddPublicKeysForUser(ctx context.Context, userUUID user.UUID, 
 }
 
 // DeleteKeysForUser removes keys identified by fingerprint, comment, or value.
+// The following errors can be expected:
+//   - [errors.NotValid] when the user uuid is not valid
+//   - [github.com/juju/juju/domain/access/errors.UserNotFound] when the provided
+//     user does not exist.
 func (s *Service) DeleteKeysForUser(ctx context.Context, userUUID user.UUID, targets ...string) error {
 	ctx, span := trace.Start(ctx, trace.NameFromFunc())
 	defer span.End()
@@ -100,14 +136,29 @@ func (s *Service) DeleteKeysForUser(ctx context.Context, userUUID user.UUID, tar
 	return s.st.DeletePublicKeysForUser(ctx, userUUID, targets)
 }
 
-// GetAllUsersPublicKeys returns active users' public keys grouped by user.
+// GetAllUsersPublicKeys returns all active users' public keys grouped by user
+// name. This is useful for building a view during controller migration.
 func (s *Service) GetAllUsersPublicKeys(ctx context.Context) (map[user.Name][]string, error) {
 	ctx, span := trace.Start(ctx, trace.NameFromFunc())
 	defer span.End()
 	return s.st.GetAllUsersPublicKeys(ctx)
 }
 
-// ImportPublicKeysForUser imports public keys from an external source.
+// ImportPublicKeysForUser will import all of the public keys available for a
+// given subject and add them to the specified Juju user. If the user already
+// has one or more of the public keys being imported they will safely be skipped
+// with no errors being returned.
+// The following errors can be expected:
+//   - [errors.NotValid] when the user uuid is not valid
+//   - [github.com/juju/juju/domain/access/errors.UserNotFound] when the user does
+//     not exist.
+//   - [keyerrors.InvalidPublicKey] when a key being imported fails validation.
+//   - [keyerrors.ReservedCommentViolation] when a key being added contains a
+//     comment string that is reserved.
+//   - [keyerrors.UnknownImportSource] when the source for the import operation is
+//     unknown to the service.
+//   - [keyerrors.ImportSubjectNotFound] when the source has indicated that the
+//     subject for the import operation does not exist.
 func (s *ImporterService) ImportPublicKeysForUser(ctx context.Context, userUUID user.UUID, subject *url.URL) error {
 	ctx, span := trace.Start(ctx, trace.NameFromFunc())
 	defer span.End()
@@ -142,7 +193,11 @@ func (s *ImporterService) ImportPublicKeysForUser(ctx context.Context, userUUID 
 	return s.st.EnsurePublicKeysForUser(ctx, userUUID, toAdd)
 }
 
-// ListPublicKeysForUser returns all public keys for a user.
+// ListPublicKeysForUser is responsible for returning the public SSH keys for
+// the specified user. The following errors can be expected:
+//   - [errors.NotValid] when the user uuid is not valid.
+//   - [github.com/juju/juju/domain/access/errors.UserNotFound] when the provided
+//     user does not exist.
 func (s *Service) ListPublicKeysForUser(ctx context.Context, userUUID user.UUID) ([]coressh.PublicKey, error) {
 	ctx, span := trace.Start(ctx, trace.NameFromFunc())
 	defer span.End()

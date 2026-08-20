@@ -13,7 +13,6 @@ import (
 
 	"github.com/juju/juju/apiserver/errors"
 	apiservertesting "github.com/juju/juju/apiserver/testing"
-	coremodel "github.com/juju/juju/core/model"
 	coressh "github.com/juju/juju/core/ssh"
 	coreuser "github.com/juju/juju/core/user"
 	usertesting "github.com/juju/juju/core/user/testing"
@@ -30,7 +29,6 @@ type keyManagerSuite struct {
 	apiUser           names.UserTag
 
 	controllerUUID string
-	modelID        coremodel.UUID
 }
 
 func TestKeyManagerSuite(t *testing.T) {
@@ -67,7 +65,6 @@ func genListPublicKey(c *tc.C, keys []string) []coressh.PublicKey {
 
 func (s *keyManagerSuite) SetUpTest(c *tc.C) {
 	s.apiUser = names.NewUserTag("admin")
-	s.modelID = tc.Must0(c, coremodel.NewUUID)
 	s.controllerUUID = "controller"
 }
 
@@ -216,7 +213,8 @@ func (s *keyManagerSuite) TestListKeysFingerprintMode(c *tc.C) {
 }
 
 // TestListKeysNoPermissions is testing that if a user doesn't have at least
-// read permission on to the model that we get back a permission denied error.
+// login permission on the controller that we get back a permission denied
+// error.
 func (s *keyManagerSuite) TestListKeysNoPermission(c *tc.C) {
 	defer s.setupMocks(c).Finish()
 
@@ -316,7 +314,7 @@ func (s *keyManagerSuite) TestAddKeysSuperUser(c *tc.C) {
 	c.Check(res, tc.DeepEquals, params.ErrorResults{})
 }
 
-// TestAddKeysModelAdmin is testing that model admin's have permissions to add
+// TestAddKeysControllerUser is testing that controller users have permissions to add
 // public keys.
 func (s *keyManagerSuite) TestAddKeysControllerUser(c *tc.C) {
 	s.apiUser = names.NewUserTag("admin")
@@ -353,7 +351,8 @@ func (s *keyManagerSuite) TestAddKeysControllerUser(c *tc.C) {
 }
 
 // TestAddKeysNonAuthorised is testing that if a user that isn't authorised for
-// adding keys to a model attempts to add keys they get back a permission error.
+// adding keys to the controller attempts to add keys they get back a permission
+// error.
 func (s *keyManagerSuite) TestAddKeysNonAuthorised(c *tc.C) {
 	s.apiUser = names.NewUserTag("tlm")
 	defer s.setupMocks(c).Finish()
@@ -379,7 +378,7 @@ func (s *keyManagerSuite) TestAddKeysNonAuthorised(c *tc.C) {
 }
 
 // TestBlockAddKeys is testing that if a change allowed block is in place that
-// no keys can be added to the model.
+// no keys can be added to the controller.
 func (s *keyManagerSuite) TestBlockAddKeys(c *tc.C) {
 	defer s.setupMocks(c).Finish()
 
@@ -440,7 +439,7 @@ func (s *keyManagerSuite) TesDeleteKeys(c *tc.C) {
 }
 
 // TestDeleteKeysSuperUser is asserting that a super user can remove public ssh
-// keys for a model.
+// keys for the controller.
 func (s *keyManagerSuite) TestDeleteKeysSuperUser(c *tc.C) {
 	s.apiUser = names.NewUserTag("superuser-fred")
 	defer s.setupMocks(c).Finish()
@@ -475,8 +474,8 @@ func (s *keyManagerSuite) TestDeleteKeysSuperUser(c *tc.C) {
 	c.Check(res, tc.DeepEquals, params.ErrorResults{})
 }
 
-// TestDeleteKeysModelAdmin is asserting that model admins can removed public
-// ssh keys from the model.
+// TestDeleteKeysControllerUser is asserting that controller users can remove
+// public ssh keys from the controller.
 func (s *keyManagerSuite) TestDeleteKeysControllerUser(c *tc.C) {
 	s.apiUser = names.NewUserTag("admin")
 	defer s.setupMocks(c).Finish()
@@ -511,9 +510,9 @@ func (s *keyManagerSuite) TestDeleteKeysControllerUser(c *tc.C) {
 	c.Check(res, tc.DeepEquals, params.ErrorResults{})
 }
 
-// TestDeleteKeysNonAuthorised is asserting that user that is not authorised for
-// writing to a model cannot not remove keys from the model and receives an
-// unauthorized error.
+// TestDeleteKeysNonAuthorised is asserting that a user that is not authorised
+// for writing to the controller cannot remove keys from the controller and
+// receives an unauthorized error.
 func (s *keyManagerSuite) TestDeleteKeysNonAuthorised(c *tc.C) {
 	s.apiUser = names.NewUserTag("tlm")
 	defer s.setupMocks(c).Finish()
@@ -538,7 +537,7 @@ func (s *keyManagerSuite) TestDeleteKeysNonAuthorised(c *tc.C) {
 	})
 }
 
-// TestBlockDeleteKeys is testing that if we try and delete any model keys while
+// TestBlockDeleteKeys is testing that if we try and delete any controller keys while
 // a remove block is in place the operation results in a operation blocked
 // error.
 func (s *keyManagerSuite) TestBlockDeleteKeys(c *tc.C) {

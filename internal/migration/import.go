@@ -503,9 +503,8 @@ func (op *opImportAuthorizedKeys) Execute(ctx context.Context, st *importState) 
 	return nil
 }
 
-// RemoveOnAbort deletes all authorized keys stored for the model. A missing
-// model means an earlier cleanup attempt already removed the model and its key
-// associations, so it is an idempotent success.
+// RemoveOnAbort does nothing because controller-scoped key imports are not
+// rolled back when a model import is aborted.
 func (op *opImportAuthorizedKeys) RemoveOnAbort(ctx context.Context) error {
 	return nil
 }

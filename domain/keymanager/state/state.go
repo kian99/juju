@@ -24,7 +24,8 @@ type State struct {
 	*domain.StateBase
 }
 
-// NewState constructs a state for interacting with controller user keys.
+// NewState is responsible for constructing a new [State] that can be used with
+// this domain's corresponding service.
 func NewState(factory database.TxnRunnerFactory) *State {
 	return &State{StateBase: domain.NewStateBase(factory)}
 }
@@ -53,7 +54,11 @@ AND removed = false
 	return nil
 }
 
-// AddPublicKeysForUser adds public keys for a user to the controller.
+// AddPublicKeysForUser is responsible for adding one or more SSH public keys
+// for a user to the controller. The following errors can be expected:
+//   - [keyerrors.PublicKeyAlreadyExists] when one of the public keys being added
+//     for a user already exists on the controller.
+//   - [accesserrors.UserNotFound] when the user does not exist.
 func (s *State) AddPublicKeysForUser(ctx context.Context, userUUID user.UUID, publicKeys []keymanager.PublicKey) error {
 	db, err := s.DB(ctx)
 	if err != nil {
@@ -114,7 +119,11 @@ WHERE sha.algorithm = $userPublicKeyInsert.algorithm
 	})
 }
 
-// EnsurePublicKeysForUser ensures public keys exist for a user.
+// EnsurePublicKeysForUser will attempt to add the given set of public keys for
+// the user to the controller. If the user already has the public key it will be
+// skipped and no [keyerrors.PublicKeyAlreadyExists] error will be returned.
+// The following errors can be expected:
+// - [accesserrors.UserNotFound] when the user does not exist.
 func (s *State) EnsurePublicKeysForUser(ctx context.Context, userUUID user.UUID, publicKeys []keymanager.PublicKey) error {
 	for _, publicKey := range publicKeys {
 		err := s.AddPublicKeysForUser(ctx, userUUID, []keymanager.PublicKey{publicKey})
@@ -125,7 +134,9 @@ func (s *State) EnsurePublicKeysForUser(ctx context.Context, userUUID user.UUID,
 	return nil
 }
 
-// GetPublicKeysForUser returns all public keys for a user.
+// GetPublicKeysForUser is responsible for returning all of the public keys for
+// the user UUID. The following errors can be expected:
+// - [accesserrors.UserNotFound] when the user does not exist.
 func (s *State) GetPublicKeysForUser(ctx context.Context, userUUID user.UUID) ([]coressh.PublicKey, error) {
 	db, err := s.DB(ctx)
 	if err != nil {
@@ -163,7 +174,9 @@ WHERE upsk.user_uuid = $userUUIDValue.user_uuid
 	return result, nil
 }
 
-// GetAllUsersPublicKeys returns all active users' public keys.
+// GetAllUsersPublicKeys returns all of the public keys in the controller for
+// each user grouped by [user.Name]. This is useful for building a view during
+// controller migration.
 func (s *State) GetAllUsersPublicKeys(ctx context.Context) (map[user.Name][]string, error) {
 	db, err := s.DB(ctx)
 	if err != nil {
@@ -204,7 +217,11 @@ AND ua.disabled = false
 	return result, nil
 }
 
-// DeletePublicKeysForUser removes matching keys from a user.
+// DeletePublicKeysForUser is responsible for removing keys from the user's
+// list of public keys. keyIDs represent a key fingerprint, public key data, or
+// comment.
+// The following errors can be expected:
+// - [accesserrors.UserNotFound] when the user does not exist.
 func (s *State) DeletePublicKeysForUser(ctx context.Context, userUUID user.UUID, keyIDs []string) error {
 	db, err := s.DB(ctx)
 	if err != nil {
