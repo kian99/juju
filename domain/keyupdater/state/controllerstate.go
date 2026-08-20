@@ -9,9 +9,7 @@ import (
 	"github.com/canonical/sqlair"
 
 	"github.com/juju/juju/core/database"
-	"github.com/juju/juju/core/model"
 	"github.com/juju/juju/domain"
-	modelerrors "github.com/juju/juju/domain/model/errors"
 	"github.com/juju/juju/internal/errors"
 )
 
@@ -76,87 +74,10 @@ WHERE key IN ($S[:])
 	return rval, nil
 }
 
-// GetUserAuthorizedKeysForModel returns the controller user keys relevant to
-// a model. The model argument is retained for the updater's API contract.
-// The following errors can be expected:
-// - [modelerrors.NotFound] if the model does not exist.
-func (s *ControllerState) GetUserAuthorizedKeysForModel(
-	ctx context.Context,
-	modelUUID model.UUID,
-) ([]string, error) {
-	db, err := s.DB(ctx)
-	if err != nil {
-		return nil, errors.Errorf(
-			"getting database when getting all user public keys for model %q: %w",
-			modelUUID, err,
-		)
-	}
-	modelUUIDVal := modelUUIDValue{modelUUID.String()}
-
-	modelExistsStmt, err := s.Prepare(`
-SELECT (uuid) AS (&modelUUIDValue.model_uuid)
-FROM v_model
-WHERE uuid = $modelUUIDValue.model_uuid
-`, modelUUIDVal)
-	if err != nil {
-		return nil, errors.Errorf(
-			"preparing model exists statement when getting public keys for model %q: %w",
-			modelUUID, err,
-		)
-	}
-
-	stmt, err := s.Prepare(`
-SELECT &authorizedKey.*
-FROM user_public_ssh_key AS upsk
-JOIN user AS u ON u.uuid = upsk.user_uuid
-JOIN user_authentication AS ua ON ua.user_uuid = u.uuid
-WHERE u.removed = false
-AND ua.disabled = false
-`, authorizedKey{})
-	if err != nil {
-		return nil, errors.Errorf(
-			"preparing model authorized keys statement when getting public keys for model %q: %w",
-			modelUUID, err,
-		)
-	}
-
-	authorizedKeys := []authorizedKey{}
-	err = db.Txn(ctx, func(ctx context.Context, tx *sqlair.TX) error {
-		err := tx.Query(ctx, modelExistsStmt, modelUUIDVal).Get(&modelUUIDVal)
-		if errors.Is(err, sqlair.ErrNoRows) {
-			return errors.Errorf(
-				"getting user authorized keys for model %q because the model does not exist",
-				modelUUID,
-			).Add(modelerrors.NotFound)
-		}
-		if err != nil {
-			return errors.Errorf(
-				"checking that model %q exists when getting user authorized keys: %w",
-				modelUUID, err,
-			)
-		}
-
-		err = tx.Query(ctx, stmt).GetAll(&authorizedKeys)
-		if err != nil && !errors.Is(err, sqlair.ErrNoRows) {
-			return errors.Errorf(
-				"getting user authorized keys on model %q: %w",
-				modelUUID, err,
-			)
-		}
-
-		return nil
-	})
-
-	if err != nil {
-		return nil, err
-	}
-
-	rval := make([]string, 0, len(authorizedKeys))
-	for _, authKey := range authorizedKeys {
-		rval = append(rval, authKey.PublicKey)
-	}
-
-	return rval, nil
+// NamespaceForWatchControllerConfig returns the namespace used to monitor
+// controller configuration changes.
+func (*ControllerState) NamespaceForWatchControllerConfig() string {
+	return "controller_config"
 }
 
 // NewControllerState constructs a new state for interacting with the

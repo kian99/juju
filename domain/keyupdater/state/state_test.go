@@ -11,16 +11,8 @@ import (
 	"github.com/juju/tc"
 
 	coremachine "github.com/juju/juju/core/machine"
-	coremodel "github.com/juju/juju/core/model"
-	usertesting "github.com/juju/juju/core/user/testing"
-	jujuversion "github.com/juju/juju/core/version"
-	domainagentbinary "github.com/juju/juju/domain/agentbinary"
 	machineerrors "github.com/juju/juju/domain/machine/errors"
-	"github.com/juju/juju/domain/model"
-	statemodel "github.com/juju/juju/domain/model/state/model"
 	schematesting "github.com/juju/juju/domain/schema/testing"
-	loggertesting "github.com/juju/juju/internal/logger/testing"
-	"github.com/juju/juju/internal/uuid"
 )
 
 type stateSuite struct {
@@ -32,19 +24,6 @@ type stateSuite struct {
 func TestStateSuite(t *testing.T) {
 	tc.Run(t, &stateSuite{})
 }
-
-var (
-	testingPublicKeys = []string{
-		// ecdsa testing public key
-		"ecdsa-sha2-nistp256 AAAAE2VjZHNhLXNoYTItbmlzdHAyNTYAAAAIbmlzdHAyNTYAAABBBG00bYFLb/sxPcmVRMg8NXZK/ldefElAkC9wD41vABdHZiSRvp+2y9BMNVYzE/FnzKObHtSvGRX65YQgRn7k5p0= juju1@example.com",
-
-		// ed25519 testing public key
-		"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIN8h8XBpjS9aBUG5cdoSWubs7wT2Lc/BEZIUQCqoaOZR juju2@example.com",
-
-		// rsa testing public key
-		"ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQDvplNOK3UBpULZKvZf/I5JHci/DufpSxj8yR4yKE2grescJxu6754jPT3xztSeLGD31/oJApJZGkMUAMRenvDqIaq+taRfOUo/l19AlGZc+Edv4bTlJzZ1Lzwex1vvL1doaLb/f76IIUHClGUgIXRceQH1ovHiIWj6nGltuLanG8YTWxlzzK33yhitmZt142DmpX1VUVF5c/Hct6Rav5lKmwej1TDed1KmHzXVoTHEsmWhKsOK27ue5yTuq0GX6LrAYDucF+2MqZCsuddXsPAW1tj5GNZSR7RrKW5q1CI0G7k9gSomuCsRMlCJ3BqID/vUSs/0qOWg4he0HUsYKQSrXIhckuZu+jYP8B80MoXT50ftRidoG/zh/PugBdXTk46FloVClQopG5A2fbqrphADcUUbRUxZ2lWQN+OVHKfEsfV2b8L2aSqZUGlryfW1cirB5JCTDvtv7rUy9/ny9iKA+8tAyKSDF0I901RDDqKc9dSkrHCg2bLnJZDoiRoWczE= juju3@example.com",
-	}
-)
 
 // ensureNetNode inserts a row into the net_node table, mostly used as a foreign key for entries in
 // other tables (e.g. machine)
@@ -95,31 +74,4 @@ func (s *stateSuite) TestCheckMachineDoesNotExist(c *tc.C) {
 		coremachine.Name("100"),
 	)
 	c.Check(err, tc.ErrorIs, machineerrors.MachineNotFound)
-}
-
-func (s *stateSuite) TestGetModelId(c *tc.C) {
-	mst := statemodel.NewState(s.TxnRunnerFactory(), loggertesting.WrapCheckLog(c))
-
-	modelUUID := tc.Must0(c, coremodel.NewUUID)
-	args := model.ModelDetailArgs{
-		UUID:               modelUUID,
-		LatestAgentVersion: jujuversion.Current,
-		AgentVersion:       jujuversion.Current,
-		AgentStream:        domainagentbinary.AgentStreamReleased,
-		ControllerUUID:     uuid.MustNewUUID(),
-		Name:               "my-awesome-model",
-		Qualifier:          "prod",
-		Type:               coremodel.IAAS,
-		Cloud:              "aws",
-		CloudType:          "ec2",
-		CloudRegion:        "myregion",
-		CredentialOwner:    usertesting.GenNewName(c, "myowner"),
-		CredentialName:     "mycredential",
-	}
-	err := mst.Create(c.Context(), args)
-	c.Assert(err, tc.ErrorIsNil)
-
-	rval, err := NewState(s.TxnRunnerFactory()).GetModelUUID(c.Context())
-	c.Check(err, tc.ErrorIsNil)
-	c.Check(rval, tc.Equals, modelUUID)
 }

@@ -13,8 +13,8 @@ import (
 	context "context"
 
 	gomock "github.com/canonical/gomock/gomock"
+
 	machine "github.com/juju/juju/core/machine"
-	model "github.com/juju/juju/core/model"
 )
 
 // MockControllerKeyProvider is a mock of ControllerKeyProvider interface.
@@ -69,11 +69,8 @@ type MockState struct {
 
 // MockStateMockRecorder is the mock recorder for MockState.
 type MockStateMockRecorder struct {
-	mock                                           *MockState
-	checkMachineExistsExpects                      []*gomock.Call2_1[context.Context, machine.Name, error]
-	getModelUUIDExpects                            []*gomock.Call1_2[context.Context, model.UUID, error]
-	namespaceForWatchModelAuthorizationKeysExpects []*gomock.Call0_1[string]
-	namespaceForWatchUserAuthenticationExpects     []*gomock.Call0_1[string]
+	mock                      *MockState
+	checkMachineExistsExpects []*gomock.Call2_1[context.Context, machine.Name, error]
 }
 
 // NewMockState creates a new mock instance.
@@ -106,60 +103,6 @@ func (mr *MockStateMockRecorder) CheckMachineExists(arg0, arg1 any) *MockStateCh
 // MockStateCheckMachineExistsCall is the typed call wrapper for CheckMachineExists.
 type MockStateCheckMachineExistsCall = gomock.Call2_1[context.Context, machine.Name, error]
 
-// GetModelUUID mocks base method.
-func (m *MockState) GetModelUUID(arg0 context.Context) (model.UUID, error) {
-	m.ctrl.T.Helper()
-	return gomock.Dispatch1_2(&m.recorder.getModelUUIDExpects, m.ctrl, m, "GetModelUUID", arg0)
-}
-
-// GetModelUUID indicates an expected call of GetModelUUID.
-func (mr *MockStateMockRecorder) GetModelUUID(arg0 any) *MockStateGetModelUUIDCall {
-	mr.mock.ctrl.T.Helper()
-	call := gomock.NewCall1_2[context.Context, model.UUID, error](mr.mock.ctrl.T, mr.mock, "GetModelUUID", gomock.EnsureMatcher(arg0))
-	mr.getModelUUIDExpects = append(mr.getModelUUIDExpects, call)
-	mr.mock.ctrl.Track(call.Call)
-	return call
-}
-
-// MockStateGetModelUUIDCall is the typed call wrapper for GetModelUUID.
-type MockStateGetModelUUIDCall = gomock.Call1_2[context.Context, model.UUID, error]
-
-// NamespaceForWatchModelAuthorizationKeys mocks base method.
-func (m *MockState) NamespaceForWatchModelAuthorizationKeys() string {
-	m.ctrl.T.Helper()
-	return gomock.Dispatch0_1(&m.recorder.namespaceForWatchModelAuthorizationKeysExpects, m.ctrl, m, "NamespaceForWatchModelAuthorizationKeys")
-}
-
-// NamespaceForWatchModelAuthorizationKeys indicates an expected call of NamespaceForWatchModelAuthorizationKeys.
-func (mr *MockStateMockRecorder) NamespaceForWatchModelAuthorizationKeys() *MockStateNamespaceForWatchModelAuthorizationKeysCall {
-	mr.mock.ctrl.T.Helper()
-	call := gomock.NewCall0_1[string](mr.mock.ctrl.T, mr.mock, "NamespaceForWatchModelAuthorizationKeys")
-	mr.namespaceForWatchModelAuthorizationKeysExpects = append(mr.namespaceForWatchModelAuthorizationKeysExpects, call)
-	mr.mock.ctrl.Track(call.Call)
-	return call
-}
-
-// MockStateNamespaceForWatchModelAuthorizationKeysCall is the typed call wrapper for NamespaceForWatchModelAuthorizationKeys.
-type MockStateNamespaceForWatchModelAuthorizationKeysCall = gomock.Call0_1[string]
-
-// NamespaceForWatchUserAuthentication mocks base method.
-func (m *MockState) NamespaceForWatchUserAuthentication() string {
-	m.ctrl.T.Helper()
-	return gomock.Dispatch0_1(&m.recorder.namespaceForWatchUserAuthenticationExpects, m.ctrl, m, "NamespaceForWatchUserAuthentication")
-}
-
-// NamespaceForWatchUserAuthentication indicates an expected call of NamespaceForWatchUserAuthentication.
-func (mr *MockStateMockRecorder) NamespaceForWatchUserAuthentication() *MockStateNamespaceForWatchUserAuthenticationCall {
-	mr.mock.ctrl.T.Helper()
-	call := gomock.NewCall0_1[string](mr.mock.ctrl.T, mr.mock, "NamespaceForWatchUserAuthentication")
-	mr.namespaceForWatchUserAuthenticationExpects = append(mr.namespaceForWatchUserAuthenticationExpects, call)
-	mr.mock.ctrl.Track(call.Call)
-	return call
-}
-
-// MockStateNamespaceForWatchUserAuthenticationCall is the typed call wrapper for NamespaceForWatchUserAuthentication.
-type MockStateNamespaceForWatchUserAuthenticationCall = gomock.Call0_1[string]
-
 // MockControllerState is a mock of ControllerState interface.
 type MockControllerState struct {
 	ctrl     *gomock.Controller
@@ -169,8 +112,8 @@ type MockControllerState struct {
 
 // MockControllerStateMockRecorder is the mock recorder for MockControllerState.
 type MockControllerStateMockRecorder struct {
-	mock                                 *MockControllerState
-	getUserAuthorizedKeysForModelExpects []*gomock.Call2_2[context.Context, model.UUID, []string, error]
+	mock                                     *MockControllerState
+	namespaceForWatchControllerConfigExpects []*gomock.Call0_1[string]
 }
 
 // NewMockControllerState creates a new mock instance.
@@ -185,20 +128,20 @@ func (m *MockControllerState) EXPECT() *MockControllerStateMockRecorder {
 	return m.recorder
 }
 
-// GetUserAuthorizedKeysForModel mocks base method.
-func (m *MockControllerState) GetUserAuthorizedKeysForModel(arg0 context.Context, arg1 model.UUID) ([]string, error) {
+// NamespaceForWatchControllerConfig mocks base method.
+func (m *MockControllerState) NamespaceForWatchControllerConfig() string {
 	m.ctrl.T.Helper()
-	return gomock.Dispatch2_2(&m.recorder.getUserAuthorizedKeysForModelExpects, m.ctrl, m, "GetUserAuthorizedKeysForModel", arg0, arg1)
+	return gomock.Dispatch0_1(&m.recorder.namespaceForWatchControllerConfigExpects, m.ctrl, m, "NamespaceForWatchControllerConfig")
 }
 
-// GetUserAuthorizedKeysForModel indicates an expected call of GetUserAuthorizedKeysForModel.
-func (mr *MockControllerStateMockRecorder) GetUserAuthorizedKeysForModel(arg0, arg1 any) *MockControllerStateGetUserAuthorizedKeysForModelCall {
+// NamespaceForWatchControllerConfig indicates an expected call of NamespaceForWatchControllerConfig.
+func (mr *MockControllerStateMockRecorder) NamespaceForWatchControllerConfig() *MockControllerStateNamespaceForWatchControllerConfigCall {
 	mr.mock.ctrl.T.Helper()
-	call := gomock.NewCall2_2[context.Context, model.UUID, []string, error](mr.mock.ctrl.T, mr.mock, "GetUserAuthorizedKeysForModel", gomock.EnsureMatcher(arg0), gomock.EnsureMatcher(arg1))
-	mr.getUserAuthorizedKeysForModelExpects = append(mr.getUserAuthorizedKeysForModelExpects, call)
+	call := gomock.NewCall0_1[string](mr.mock.ctrl.T, mr.mock, "NamespaceForWatchControllerConfig")
+	mr.namespaceForWatchControllerConfigExpects = append(mr.namespaceForWatchControllerConfigExpects, call)
 	mr.mock.ctrl.Track(call.Call)
 	return call
 }
 
-// MockControllerStateGetUserAuthorizedKeysForModelCall is the typed call wrapper for GetUserAuthorizedKeysForModel.
-type MockControllerStateGetUserAuthorizedKeysForModelCall = gomock.Call2_2[context.Context, model.UUID, []string, error]
+// MockControllerStateNamespaceForWatchControllerConfigCall is the typed call wrapper for NamespaceForWatchControllerConfig.
+type MockControllerStateNamespaceForWatchControllerConfigCall = gomock.Call0_1[string]

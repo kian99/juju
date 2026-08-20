@@ -7,9 +7,9 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/juju/juju/controller"
 	"github.com/juju/juju/core/changestream"
 	coremachine "github.com/juju/juju/core/machine"
-	"github.com/juju/juju/core/model"
 	"github.com/juju/juju/core/trace"
 	"github.com/juju/juju/core/watcher"
 	"github.com/juju/juju/core/watcher/eventsource"
@@ -24,19 +24,18 @@ type ControllerKeyProvider interface {
 	ControllerAuthorisedKeys(context.Context) ([]string, error)
 }
 
-// Service provides the means for interacting with the authorised keys in a
-// model.
+// Service provides the means for retrieving controller-authorised keys for a
+// machine in a model.
 type Service struct {
 	// controllerKeyProvider is a reference to a [ControllerKeyProvider] that
 	// can be used for fetching controller wide authorised keys.
 	controllerKeyProvider ControllerKeyProvider
 
-	// controllerSt is a reference to [ControllerState] for getting model
+	// controllerSt is a reference to [ControllerState] for watching controller
 	// authorized key information.
 	controllerSt ControllerState
 
-	// st is a reference to [State] for getting model based information for
-	// authorized keys.
+	// st is a reference to [State] for checking model machine information.
 	st State
 }
 
@@ -62,38 +61,25 @@ type WatchableService struct {
 	watcherFactory WatcherFactory
 }
 
-// State provides the access layer the [Service] needs for persisting and
-// retrieving a models authorised keys.
+// State provides the access layer the [Service] needs for checking model
+// machine information.
 type State interface {
-	// GetModelUUID returns the unique uuid for the model represented by this state.
-	GetModelUUID(context.Context) (model.UUID, error)
-
 	// CheckMachineExists check to see if the given machine exists in the model. If
 	// the machine does not exist an error satisfying
 	// [github.com/juju/juju/domain/machine/errors.MachineNotFound] is returned.
 	CheckMachineExists(context.Context, coremachine.Name) error
-
-	// NamespaceForWatchUserAuthentication returns the namespace used to
-	// monitor user authentication changes.
-	NamespaceForWatchUserAuthentication() string
-
-	// NamespaceForWatchModelAuthorizationKeys returns the namespace used to
-	// monitor authorization keys for the current model.
-	NamespaceForWatchModelAuthorizationKeys() string
 }
 
 // ControllerState provides the access layer the [Service] needs for retrieving
-// user based authorized key information.
+// controller-scoped authorized key information.
 type ControllerState interface {
-	// GetUserAuthorizedKeysForModel is responsible for returning all of the
-	// user authorized keys for a model.
-	// The following errors can be expected:
-	// - [modelerrors.NotFound] if the model does not exist.
-	GetUserAuthorizedKeysForModel(context.Context, model.UUID) ([]string, error)
+	// NamespaceForWatchControllerConfig returns the namespace used to monitor
+	// controller authorized key changes.
+	NamespaceForWatchControllerConfig() string
 }
 
-// NewService constructs a new [Service] for gathering up the authorised keys
-// within a model.
+// NewService constructs a new [Service] for retrieving controller-authorised
+// keys for machines in a model.
 func NewService(
 	controllerKeyProvider ControllerKeyProvider,
 	controllerState ControllerState,
@@ -107,7 +93,7 @@ func NewService(
 }
 
 // NewWatchableService creates a new [WatchableService] for consuming changes in
-// authorised keys for a model.
+// controller-authorised keys.
 func NewWatchableService(
 	controllerKeyProvider ControllerKeyProvider,
 	controllerState ControllerState,
@@ -150,22 +136,6 @@ func (s *Service) GetAuthorisedKeysForMachine(
 		)
 	}
 
-	modelId, err := s.st.GetModelUUID(ctx)
-	if err != nil {
-		return nil, errors.Errorf(
-			"getting model id when establishing authorized keys for machine %q: %w",
-			machineName, err,
-		)
-	}
-
-	userKeys, err := s.controllerSt.GetUserAuthorizedKeysForModel(ctx, modelId)
-	if err != nil {
-		return nil, errors.Errorf(
-			"getting authorized keys for machine %q: %w",
-			machineName, err,
-		)
-	}
-
 	controllerKeys, err := s.controllerKeyProvider.ControllerAuthorisedKeys(ctx)
 	if err != nil {
 		return nil, errors.Errorf(
@@ -174,7 +144,7 @@ func (s *Service) GetAuthorisedKeysForMachine(
 		)
 	}
 
-	return append(userKeys, controllerKeys...), nil
+	return controllerKeys, nil
 }
 
 // WatchAuthorisedKeysForMachine will watch for authorised key changes for a
@@ -206,37 +176,18 @@ func (s *WatchableService) WatchAuthorisedKeysForMachine(
 		ctx,
 		fmt.Sprintf("authorized keys watcher for %q", machineName),
 		eventsource.PredicateFilter(
-			s.st.NamespaceForWatchModelAuthorizationKeys(),
+			s.controllerSt.NamespaceForWatchControllerConfig(),
 			changestream.All,
-			nil,
-		),
-		eventsource.NamespaceFilter(
-			s.st.NamespaceForWatchUserAuthentication(),
-			changestream.All,
+			eventsource.EqualsPredicate(controller.SystemSSHKeys),
 		),
 	)
 }
 
-// GetInitialAuthorisedKeysForContainer returns the authorised keys to be used
-// when provisioning a new container for the model.
+// GetInitialAuthorisedKeysForContainer returns the controller-authorised keys
+// to be used when provisioning a new container for the model.
 func (s *Service) GetInitialAuthorisedKeysForContainer(ctx context.Context) ([]string, error) {
 	ctx, span := trace.Start(ctx, trace.NameFromFunc())
 	defer span.End()
-
-	modelId, err := s.st.GetModelUUID(ctx)
-	if err != nil {
-		return nil, errors.Errorf(
-			"getting model id when establishing initial authorized keys for container: %w",
-			err,
-		)
-	}
-
-	userKeys, err := s.controllerSt.GetUserAuthorizedKeysForModel(ctx, modelId)
-	if err != nil {
-		return nil, errors.Errorf(
-			"getting initial authorized keys for container: %w", err,
-		)
-	}
 
 	controllerKeys, err := s.controllerKeyProvider.ControllerAuthorisedKeys(ctx)
 	if err != nil {
@@ -245,5 +196,5 @@ func (s *Service) GetInitialAuthorisedKeysForContainer(ctx context.Context) ([]s
 		)
 	}
 
-	return append(userKeys, controllerKeys...), nil
+	return controllerKeys, nil
 }

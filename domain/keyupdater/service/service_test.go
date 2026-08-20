@@ -11,7 +11,6 @@ import (
 	"github.com/juju/tc"
 
 	coremachine "github.com/juju/juju/core/machine"
-	"github.com/juju/juju/core/model"
 	machineerrors "github.com/juju/juju/domain/machine/errors"
 	"github.com/juju/juju/internal/errors"
 )
@@ -20,8 +19,6 @@ type serviceSuite struct {
 	controllerKeyProvider *MockControllerKeyProvider
 	state                 *MockState
 	controllerState       *MockControllerState
-
-	modelId model.UUID
 }
 
 func TestServiceSuite(t *testing.T) {
@@ -33,15 +30,9 @@ var (
 		"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIN8h8XBpjS9aBUG5cdoSWubs7wT2Lc/BEZIUQCqoaOZR juju-client-key",
 		"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIN8h8XBpjS9aBUG5cdoSWubs7wT2Lc/BEZIUQCqoaOZR juju-system-key",
 	}
-
-	machineKeys = []string{
-		"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAII4GpCvqUUYUJlx6d1kpUO9k/t4VhSYsf0yE0/QTqDzC existing1",
-		"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJQJ9wv0uC3yytXM3d2sJJWvZLuISKo7ZHwafHVviwVe existing2",
-	}
 )
 
 func (s *serviceSuite) SetUpTest(c *tc.C) {
-	s.modelId = tc.Must0(c, model.NewUUID)
 }
 
 func (s *serviceSuite) setupMocks(c *tc.C) *gomock.Controller {
@@ -57,14 +48,8 @@ func (s *serviceSuite) setupMocks(c *tc.C) *gomock.Controller {
 func (s *serviceSuite) TestAuthorisedKeysForMachine(c *tc.C) {
 	defer s.setupMocks(c).Finish()
 
-	s.controllerKeyProvider.EXPECT().ControllerAuthorisedKeys(gomock.Any()).Return(controllerKeys, nil)
-	s.state.EXPECT().GetModelUUID(gomock.Any()).Return(s.modelId, nil)
 	s.state.EXPECT().CheckMachineExists(gomock.Any(), coremachine.Name("0")).Return(nil)
-	s.controllerState.EXPECT().GetUserAuthorizedKeysForModel(gomock.Any(), s.modelId).Return(machineKeys, nil)
-
-	expected := make([]string, 0, len(controllerKeys)+len(machineKeys))
-	expected = append(expected, controllerKeys...)
-	expected = append(expected, machineKeys...)
+	s.controllerKeyProvider.EXPECT().ControllerAuthorisedKeys(gomock.Any()).Return(controllerKeys, nil)
 
 	keys, err := NewService(s.controllerKeyProvider, s.controllerState, s.state).GetAuthorisedKeysForMachine(
 		c.Context(),
@@ -72,9 +57,8 @@ func (s *serviceSuite) TestAuthorisedKeysForMachine(c *tc.C) {
 	)
 	c.Check(err, tc.ErrorIsNil)
 
-	slices.Sort(expected)
 	slices.Sort(keys)
-	c.Check(keys, tc.DeepEquals, expected)
+	c.Check(keys, tc.DeepEquals, controllerKeys)
 }
 
 // TestAuthorisedKeysForMachineNoControllerKeys is asserting that if no
@@ -82,13 +66,8 @@ func (s *serviceSuite) TestAuthorisedKeysForMachine(c *tc.C) {
 func (s *serviceSuite) TestAuthorisedKeysForMachineNoControllerKeys(c *tc.C) {
 	defer s.setupMocks(c).Finish()
 
-	s.controllerKeyProvider.EXPECT().ControllerAuthorisedKeys(gomock.Any()).Return(nil, nil)
-	s.state.EXPECT().GetModelUUID(gomock.Any()).Return(s.modelId, nil)
 	s.state.EXPECT().CheckMachineExists(gomock.Any(), coremachine.Name("0")).Return(nil)
-	s.controllerState.EXPECT().GetUserAuthorizedKeysForModel(gomock.Any(), s.modelId).Return(machineKeys, nil)
-
-	expected := make([]string, 0, len(machineKeys))
-	expected = append(expected, machineKeys...)
+	s.controllerKeyProvider.EXPECT().ControllerAuthorisedKeys(gomock.Any()).Return(nil, nil)
 
 	keys, err := NewService(s.controllerKeyProvider, s.controllerState, s.state).GetAuthorisedKeysForMachine(
 		c.Context(),
@@ -96,9 +75,8 @@ func (s *serviceSuite) TestAuthorisedKeysForMachineNoControllerKeys(c *tc.C) {
 	)
 	c.Check(err, tc.ErrorIsNil)
 
-	slices.Sort(expected)
 	slices.Sort(keys)
-	c.Check(keys, tc.DeepEquals, expected)
+	c.Check(keys, tc.DeepEquals, []string(nil))
 }
 
 // TestAuthorisedKeysForMachineNotFound is asserting that if we ask for
@@ -121,9 +99,7 @@ func (s *serviceSuite) TestAuthorisedKeysForMachineNotFound(c *tc.C) {
 func (s *serviceSuite) TestGetInitialAuthorisedKeysForContainerSuccess(c *tc.C) {
 	defer s.setupMocks(c).Finish()
 
-	s.controllerKeyProvider.EXPECT().ControllerAuthorisedKeys(gomock.Any()).Return(nil, nil)
-	s.state.EXPECT().GetModelUUID(gomock.Any()).Return(s.modelId, nil)
-	s.controllerState.EXPECT().GetUserAuthorizedKeysForModel(gomock.Any(), s.modelId).Return(controllerKeys, nil)
+	s.controllerKeyProvider.EXPECT().ControllerAuthorisedKeys(gomock.Any()).Return(controllerKeys, nil)
 
 	keys, err := NewService(s.controllerKeyProvider, s.controllerState, s.state).
 		GetInitialAuthorisedKeysForContainer(c.Context())
@@ -138,12 +114,7 @@ func (s *serviceSuite) TestGetInitialAuthorisedKeysForContainerFailure(c *tc.C) 
 
 	boom := errors.New("boom")
 
-	s.controllerKeyProvider.EXPECT().ControllerAuthorisedKeys(gomock.Any()).Return(nil, nil).AnyTimes()
-	s.state.EXPECT().GetModelUUID(gomock.Any()).Return(s.modelId, nil)
-	s.controllerState.EXPECT().GetUserAuthorizedKeysForModel(gomock.Any(), s.modelId).Return(
-		nil,
-		boom,
-	)
+	s.controllerKeyProvider.EXPECT().ControllerAuthorisedKeys(gomock.Any()).Return(nil, boom)
 
 	_, err := NewService(s.controllerKeyProvider, s.controllerState, s.state).
 		GetInitialAuthorisedKeysForContainer(c.Context())

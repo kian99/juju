@@ -6,30 +6,16 @@ package state
 import (
 	"context"
 	"database/sql"
-	"slices"
 	"testing"
 
-	"github.com/juju/clock"
 	"github.com/juju/tc"
 
 	"github.com/juju/juju/controller"
-	"github.com/juju/juju/core/model"
-	"github.com/juju/juju/core/user"
-	usertesting "github.com/juju/juju/core/user/testing"
-	userstate "github.com/juju/juju/domain/access/state"
-	"github.com/juju/juju/domain/keymanager"
-	keymanagerstate "github.com/juju/juju/domain/keymanager/state"
-	modelerrors "github.com/juju/juju/domain/model/errors"
-	modelstatetesting "github.com/juju/juju/domain/model/state/testing"
 	schematesting "github.com/juju/juju/domain/schema/testing"
-	"github.com/juju/juju/internal/ssh"
 )
 
 type controllerStateSuite struct {
 	schematesting.ControllerSuite
-
-	modelUUID model.UUID
-	userUUID  user.UUID
 }
 
 func TestControllerStateSuite(t *testing.T) {
@@ -56,36 +42,10 @@ INSERT INTO controller_config (key, value) VALUES(?, ?)
 	c.Assert(err, tc.ErrorIsNil)
 }
 
-func generatePublicKeys(c *tc.C, publicKeys []string) []keymanager.PublicKey {
-	rval := make([]keymanager.PublicKey, 0, len(publicKeys))
-	for _, pk := range publicKeys {
-		parsedKey, err := ssh.ParsePublicKey(pk)
-		c.Assert(err, tc.ErrorIsNil)
-
-		rval = append(rval, keymanager.PublicKey{
-			Comment:         parsedKey.Comment,
-			FingerprintHash: keymanager.FingerprintHashAlgorithmSHA256,
-			Fingerprint:     parsedKey.Fingerprint(),
-			Key:             pk,
-		})
-	}
-
-	return rval
-}
-
 func (s *controllerStateSuite) SetUpTest(c *tc.C) {
 	s.ControllerSuite.SetUpTest(c)
 	s.SeedControllerUUID(c)
 
-	s.modelUUID = modelstatetesting.CreateTestModel(c, s.TxnRunnerFactory(), "keys")
-	var userUUID user.UUID
-	err := s.TxnRunner().StdTxn(c.Context(), func(ctx context.Context,
-		tx *sql.Tx) error {
-		return tx.QueryRowContext(ctx, "SELECT uuid FROM user where name = ?", "test-userkeys").Scan(&userUUID)
-	})
-	c.Assert(err, tc.ErrorIsNil)
-	c.Assert(userUUID, tc.NotNil)
-	s.userUUID = userUUID
 }
 
 // TestControllerConfigKeysEmpty ensures that if we ask for keys that do not
@@ -110,45 +70,4 @@ func (s *controllerStateSuite) TestControllerConfigKeys(c *tc.C) {
 	c.Check(err, tc.ErrorIsNil)
 	c.Check(len(kv), tc.Equals, 1)
 	c.Check(kv[controller.SystemSSHKeys], tc.Equals, controllerSSHKeys)
-}
-
-// TestGetUserAuthorizedKeysForModelNotFound is asserting that is we ask for
-// keys on a model that doesn't exist we get back a [modelerrors.NotFound] error.
-func (s *controllerStateSuite) TestGetUserAuthorizedKeysForModelNotFound(c *tc.C) {
-	st := NewControllerState(s.TxnRunnerFactory())
-	_, err := st.GetUserAuthorizedKeysForModel(c.Context(), tc.Must0(c, model.NewUUID))
-	c.Check(err, tc.ErrorIs, modelerrors.NotFound)
-}
-
-// TestGetUserAuthorizedKeysForModel is asserting the happy path of getting all
-// user authorized keys for a model. We purposefully setup multiple users on the
-// model in this test to make this scenario more realisticlty.
-func (s *controllerStateSuite) TestGetUserAuthorizedKeysForModel(c *tc.C) {
-	kmSt := keymanagerstate.NewState(s.TxnRunnerFactory())
-	keysToAdd := generatePublicKeys(c, testingPublicKeys)
-
-	err := kmSt.AddPublicKeysForUser(c.Context(), s.userUUID, keysToAdd[0:1])
-	c.Check(err, tc.ErrorIsNil)
-
-	secondUserId := usertesting.GenUserUUID(c)
-	userSt := userstate.NewUserState(s.TxnRunnerFactory(), clock.WallClock)
-	err = userSt.AddUser(
-		c.Context(),
-		secondUserId,
-		usertesting.GenNewName(c, "second"),
-		"second",
-		false,
-		s.userUUID,
-	)
-	c.Assert(err, tc.ErrorIsNil)
-
-	err = kmSt.AddPublicKeysForUser(c.Context(), secondUserId, keysToAdd[1:3])
-	c.Check(err, tc.ErrorIsNil)
-
-	st := NewControllerState(s.TxnRunnerFactory())
-	keys, err := st.GetUserAuthorizedKeysForModel(c.Context(), s.modelUUID)
-	c.Assert(err, tc.ErrorIsNil)
-	slices.Sort(keys)
-	slices.Sort(testingPublicKeys)
-	c.Check(keys, tc.DeepEquals, testingPublicKeys)
 }

@@ -10,7 +10,6 @@ import (
 
 	"github.com/juju/juju/core/database"
 	coremachine "github.com/juju/juju/core/machine"
-	"github.com/juju/juju/core/model"
 	"github.com/juju/juju/domain"
 	machineerrors "github.com/juju/juju/domain/machine/errors"
 	"github.com/juju/juju/internal/errors"
@@ -69,60 +68,6 @@ WHERE name = $machineName.name
 	}
 
 	return nil
-}
-
-// GetModelUUID returns the uuid for the model represented by this state.
-func (s *State) GetModelUUID(ctx context.Context) (model.UUID, error) {
-	db, err := s.DB(ctx)
-	if err != nil {
-		return model.UUID(""), errors.Errorf(
-			"getting database to get the model uuid: %w", err,
-		)
-	}
-
-	modelUUIDVal := modelUUIDValue{}
-
-	stmt, err := s.Prepare(`
-SELECT (uuid) AS (&modelUUIDValue.model_uuid)
-FROM model
-`, modelUUIDVal)
-	if err != nil {
-		return model.UUID(""), errors.Errorf(
-			"preparing model uuid selection statement: %w", err,
-		)
-	}
-
-	err = db.Txn(ctx, func(ctx context.Context, tx *sqlair.TX) error {
-		err := tx.Query(ctx, stmt).Get(&modelUUIDVal)
-		if errors.Is(err, sqlair.ErrNoRows) {
-			return errors.New(
-				"getting model uuid from database, read only model records don't exist",
-			)
-		} else if err != nil {
-			return errors.Errorf(
-				"getting model uuid from database: %w", err,
-			)
-		}
-		return nil
-	})
-
-	if err != nil {
-		return model.UUID(""), err
-	}
-
-	return model.UUID(modelUUIDVal.UUID), nil
-}
-
-// NamespaceForWatchUserAuthentication returns the namespace used to
-// monitor user authentication changes.
-func (s *State) NamespaceForWatchUserAuthentication() string {
-	return "user_authentication"
-}
-
-// NamespaceForWatchModelAuthorizationKeys returns the namespace used to
-// monitor authorization keys for the current model.
-func (s *State) NamespaceForWatchModelAuthorizationKeys() string {
-	return "user_public_ssh_key"
 }
 
 // NewState constructs a new state for interacting with the underlying

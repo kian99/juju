@@ -12,6 +12,7 @@ import (
 	"github.com/juju/tc"
 
 	"github.com/juju/juju/cloud"
+	"github.com/juju/juju/controller"
 	"github.com/juju/juju/core/changestream"
 	"github.com/juju/juju/core/credential"
 	"github.com/juju/juju/core/database"
@@ -23,12 +24,10 @@ import (
 	jujuversion "github.com/juju/juju/core/version"
 	"github.com/juju/juju/core/watcher/watchertest"
 	"github.com/juju/juju/domain"
-	accessservice "github.com/juju/juju/domain/access/service"
 	accessstate "github.com/juju/juju/domain/access/state"
 	cloudbootstrap "github.com/juju/juju/domain/cloud/bootstrap"
+	controllerconfigstate "github.com/juju/juju/domain/controllerconfig/state"
 	credentialbootstrap "github.com/juju/juju/domain/credential/bootstrap"
-	keymanagerservice "github.com/juju/juju/domain/keymanager/service"
-	keymanagerstate "github.com/juju/juju/domain/keymanager/state"
 	"github.com/juju/juju/domain/keyupdater/service"
 	"github.com/juju/juju/domain/keyupdater/state"
 	"github.com/juju/juju/domain/life"
@@ -136,11 +135,8 @@ func (s *keyUpdaterSuite) SetUpTest(c *tc.C) {
 	s.createMachine(c, "0")
 }
 
-// TestWatchAuthorizedKeysForMachine is here to assert an integration test
-// between all the components of key updating. Specifically we want to see that
-// as users come and go from the system and also their private keys we get
-// watcher events and the authorized keys reported for the machine in question
-// is correct.
+// TestWatchAuthorizedKeysForMachine asserts that controller authorized key
+// changes are watched, while user key changes are ignored.
 func (s *keyUpdaterSuite) TestWatchAuthorizedKeysForMachine(c *tc.C) {
 	ctx, cancel := jujutesting.LongWaitContext()
 	defer cancel()
@@ -167,55 +163,16 @@ func (s *keyUpdaterSuite) TestWatchAuthorizedKeysForMachine(c *tc.C) {
 	watcher, err := svc.WatchAuthorisedKeysForMachine(ctx, machine.Name("0"))
 	c.Assert(err, tc.ErrorIsNil)
 
-	keyManagerSt := keymanagerstate.NewState(s.TxnRunnerFactory())
-	keyManagerSvc := keymanagerservice.NewService(keyManagerSt)
-
 	harness := watchertest.NewHarness(idler, watchertest.NewWatcherC(c, watcher))
 
 	harness.AddTest(c, func(c *tc.C) {
-		err = keyManagerSvc.AddPublicKeysForUser(
+		err = controllerconfigstate.NewState(s.TxnRunnerFactory()).UpdateControllerConfig(
 			ctx,
-			s.userID,
-			"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAII4GpCvqUUYUJlx6d1kpUO9k/t4VhSYsf0yE0/QTqDzC one@juju.is",
-			"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJQJ9wv0uC3yytXM3d2sJJWvZLuISKo7ZHwafHVviwVe two@juju.is",
+			map[string]string{
+				controller.SystemSSHKeys: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIN8h8XBpjS9aBUG5cdoSWubs7wT2Lc/BEZIUQCqoaOZR juju-system-key",
+			},
+			nil,
 		)
-		c.Assert(err, tc.ErrorIsNil)
-	}, func(w watchertest.WatcherC[struct{}]) {
-		w.AssertChange()
-	})
-
-	harness.AddTest(c, func(c *tc.C) {
-		err = keyManagerSvc.DeleteKeysForUser(
-			ctx,
-			s.userID,
-			"one@juju.is",
-		)
-		c.Assert(err, tc.ErrorIsNil)
-	}, func(w watchertest.WatcherC[struct{}]) {
-		w.AssertChange()
-	})
-
-	userSvc := accessservice.NewUserService(
-		accessstate.NewUserState(s.ControllerSuite.TxnRunnerFactory(), clock.WallClock), clock.WallClock,
-	)
-
-	harness.AddTest(c, func(c *tc.C) {
-		err = userSvc.DisableUserAuthentication(ctx, user.AdminUserName)
-		c.Assert(err, tc.ErrorIsNil)
-	}, func(w watchertest.WatcherC[struct{}]) {
-		w.AssertChange()
-	})
-
-	harness.AddTest(c, func(c *tc.C) {
-		keys, err := svc.GetAuthorisedKeysForMachine(ctx, machine.Name("0"))
-		c.Assert(err, tc.ErrorIsNil)
-		c.Assert(len(keys), tc.Equals, 0)
-	}, func(w watchertest.WatcherC[struct{}]) {
-		w.AssertNoChange()
-	})
-
-	harness.AddTest(c, func(c *tc.C) {
-		err = userSvc.EnableUserAuthentication(ctx, user.AdminUserName)
 		c.Assert(err, tc.ErrorIsNil)
 	}, func(w watchertest.WatcherC[struct{}]) {
 		w.AssertChange()
@@ -225,23 +182,8 @@ func (s *keyUpdaterSuite) TestWatchAuthorizedKeysForMachine(c *tc.C) {
 		keys, err := svc.GetAuthorisedKeysForMachine(ctx, machine.Name("0"))
 		c.Assert(err, tc.ErrorIsNil)
 		c.Assert(keys, tc.DeepEquals, []string{
-			"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJQJ9wv0uC3yytXM3d2sJJWvZLuISKo7ZHwafHVviwVe two@juju.is",
+			"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIN8h8XBpjS9aBUG5cdoSWubs7wT2Lc/BEZIUQCqoaOZR juju-system-key",
 		})
-	}, func(w watchertest.WatcherC[struct{}]) {
-		w.AssertNoChange()
-	})
-
-	harness.AddTest(c, func(c *tc.C) {
-		err = userSvc.RemoveUser(ctx, user.AdminUserName)
-		c.Assert(err, tc.ErrorIsNil)
-	}, func(w watchertest.WatcherC[struct{}]) {
-		w.AssertChange()
-	})
-
-	harness.AddTest(c, func(c *tc.C) {
-		keys, err := svc.GetAuthorisedKeysForMachine(ctx, machine.Name("0"))
-		c.Assert(err, tc.ErrorIsNil)
-		c.Assert(len(keys), tc.Equals, 0)
 	}, func(w watchertest.WatcherC[struct{}]) {
 		w.AssertNoChange()
 	})
