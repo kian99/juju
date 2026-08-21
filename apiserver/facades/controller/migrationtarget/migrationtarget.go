@@ -51,8 +51,8 @@ type ModelImporter interface {
 	// ImportModel applies a v8 migration envelope's controller-scoped semantic
 	// data to the target controller: the durable model_migration_import claim,
 	// the target-local model bootstrap, and the users, credential, permissions,
-	// authorized keys, secret backend, leadership and cloud image metadata
-	// carried by the import args.
+	// secret backend, leadership and cloud image metadata carried by the import
+	// args.
 	ImportModel(ctx context.Context, args migration.ImportModelArgs, view export.ProjectionView) error
 
 	// CommitActivation records that the source committed the migration,
@@ -831,15 +831,6 @@ func importModelArgs(envelope params.SerializedModelV2, modelDBPayload *latest.M
 			GrantOn:     p.GrantOn,
 			SubjectName: p.SubjectName,
 			Access:      p.Access,
-		})
-	}
-	if n := len(envelope.AuthorizedKeys); n > 0 {
-		info.AuthorizedKeys = make([]coremodelmigration.ModelAuthorizedKey, 0, n)
-	}
-	for _, k := range envelope.AuthorizedKeys {
-		info.AuthorizedKeys = append(info.AuthorizedKeys, coremodelmigration.ModelAuthorizedKey{
-			Username:  k.Username,
-			PublicKey: k.PublicKey,
 		})
 	}
 	if backend := envelope.SecretBackend; backend != nil {

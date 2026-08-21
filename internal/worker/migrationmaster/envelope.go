@@ -155,12 +155,6 @@ func envelopeFromControllerModelInfo(
 			Access:      perm.Access,
 		})
 	}
-	for _, key := range info.AuthorizedKeys {
-		envelope.AuthorizedKeys = append(envelope.AuthorizedKeys, params.ModelAuthorizedKey{
-			Username:  key.Username,
-			PublicKey: key.PublicKey,
-		})
-	}
 	if backend := info.SecretBackend; backend != nil {
 		envelope.SecretBackend = &params.ModelSecretBackend{
 			Name:        backend.Name,

@@ -18,7 +18,6 @@ import (
 	credential "github.com/juju/juju/domain/credential/modelmigration"
 	crossmodelrelation "github.com/juju/juju/domain/crossmodelrelation/modelmigration"
 	externalcontroller "github.com/juju/juju/domain/externalcontroller/modelmigration"
-	keymanager "github.com/juju/juju/domain/keymanager/modelmigration"
 	lease "github.com/juju/juju/domain/lease/modelmigration"
 	machine "github.com/juju/juju/domain/machine/modelmigration"
 	model "github.com/juju/juju/domain/model/modelmigration"
@@ -73,7 +72,6 @@ func ImportOperations(
 	// after the model has been imported and activated.
 
 	sequence.RegisterImport(coordinator)
-	keymanager.RegisterImport(coordinator, clock, logger.Child("keymanager"))
 	modelconfig.RegisterImport(coordinator, modelDefaultsProvider, logger.Child("modelconfig"))
 	access.RegisterImport(coordinator, clock, logger.Child("access"))
 	network.RegisterImportSubnets(coordinator, logger.Child("subnets"))

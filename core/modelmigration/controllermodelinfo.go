@@ -10,8 +10,8 @@ import (
 // ControllerModelInfo aggregates the controller-database records scoped to a
 // single migrating model, in target-portable semantic form. Source-local
 // integer IDs and un-translated source UUID foreign keys are never present:
-// users are identified by username, SSH keys by their material, clouds, regions
-// and credentials by natural key, and secret backends by name.
+// users are identified by username, clouds, regions and credentials by natural
+// key, and secret backends by name.
 type ControllerModelInfo struct {
 	// ModelInfo is the model's bootstrap identity.
 	ModelInfo ModelIdentityInfo
@@ -21,8 +21,6 @@ type ControllerModelInfo struct {
 	ModelCredential *ModelCloudCredential
 	// Permissions are the model and offer permission grants for the model.
 	Permissions []ModelPermission
-	// AuthorizedKeys are the SSH keys authorised for the model.
-	AuthorizedKeys []ModelAuthorizedKey
 	// SecretBackend is the secret backend the model uses, or nil for the default.
 	SecretBackend *ModelSecretBackend
 	// SecretBackendRefs maps the model's secret revisions to their backends.
@@ -87,13 +85,6 @@ type ModelPermission struct {
 	GrantOn     string
 	SubjectName string
 	Access      string
-}
-
-// ModelAuthorizedKey is an SSH public key authorised for the model, carried by
-// username and key material.
-type ModelAuthorizedKey struct {
-	Username  string
-	PublicKey string
 }
 
 // ModelSecretBackend identifies the secret backend the model uses, by name.

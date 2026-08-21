@@ -481,9 +481,6 @@ func (s *v8Suite) TestImportRunsGuardsThenDelegatesToImportModel(c *tc.C) {
 	envelope.Permissions = []params.ModelPermission{{
 		ObjectType: "model", GrantOn: s.modelUUID, SubjectName: "bob@external", Access: "read",
 	}}
-	envelope.AuthorizedKeys = []params.ModelAuthorizedKey{{
-		Username: "bob@external", PublicKey: "ssh-ed25519 AAAA bob@host",
-	}}
 	envelope.SecretBackend = &params.ModelSecretBackend{Name: "vault", BackendType: "vault"}
 	envelope.SecretBackendRefs = []params.SecretBackendReference{{
 		BackendName: "vault", SecretRevisionUUID: "secret-rev-uuid", SecretID: "secret:abc",
@@ -541,9 +538,6 @@ func (s *v8Suite) TestImportRunsGuardsThenDelegatesToImportModel(c *tc.C) {
 			},
 			Permissions: []coremodelmigration.ModelPermission{{
 				ObjectType: "model", GrantOn: s.modelUUID, SubjectName: "bob@external", Access: "read",
-			}},
-			AuthorizedKeys: []coremodelmigration.ModelAuthorizedKey{{
-				Username: "bob@external", PublicKey: "ssh-ed25519 AAAA bob@host",
 			}},
 			SecretBackend: &coremodelmigration.ModelSecretBackend{
 				Name: "vault", BackendType: "vault",

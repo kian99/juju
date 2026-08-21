@@ -29,8 +29,6 @@ import (
 	cloudimagemetadatastate "github.com/juju/juju/domain/cloudimagemetadata/state"
 	credentialbootstrap "github.com/juju/juju/domain/credential/bootstrap"
 	"github.com/juju/juju/domain/export"
-	keymanagerservice "github.com/juju/juju/domain/keymanager/service"
-	keymanagerstate "github.com/juju/juju/domain/keymanager/state"
 	leaseservice "github.com/juju/juju/domain/lease/service"
 	leasestate "github.com/juju/juju/domain/lease/state"
 	modelstatecontroller "github.com/juju/juju/domain/model/state/controller"
@@ -178,10 +176,6 @@ func (s *controllerImportSuite) TestImportModelHappyPath(c *tc.C) {
 		{ObjectType: "model", GrantOn: modelUUID.String(), SubjectName: "carol", Access: "read"},
 		{ObjectType: "offer", GrantOn: offerUUID, SubjectName: "bob@external", Access: "consume"},
 	}
-	info.AuthorizedKeys = []coremodelmigration.ModelAuthorizedKey{
-		{Username: "bob@external", PublicKey: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAII4GpCvqUUYUJlx6d1kpUO9k/t4VhSYsf0yE0/QTqDzC bob@host"},
-		{Username: "carol", PublicKey: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJQJ9wv0uC3yytXM3d2sJJWvZLuISKo7ZHwafHVviwVe carol@host"},
-	}
 	info.Leaders = []coremodelmigration.ApplicationLeadership{
 		{Application: "myapp", Leader: "myapp/0"},
 	}
@@ -227,8 +221,8 @@ func (s *controllerImportSuite) TestImportModelHappyPath(c *tc.C) {
 	c.Check(err, tc.ErrorIs, accesserrors.UserNotFound)
 
 	// carol was never created (local users are never auto-created), so her
-	// permission and authorized-key entries above must have been silently
-	// skipped without erroring the whole import.
+	// permission entry above was silently skipped without erroring the whole
+	// import.
 	_, err = accessSvc.GetUserByName(c.Context(), carolName)
 	c.Check(err, tc.ErrorIs, accesserrors.UserNotFound)
 
@@ -243,14 +237,6 @@ func (s *controllerImportSuite) TestImportModelHappyPath(c *tc.C) {
 		corepermission.ID{ObjectType: corepermission.Offer, Key: offerUUID})
 	c.Assert(err, tc.ErrorIsNil)
 	c.Check(offerAccess.Access, tc.Equals, corepermission.ConsumeAccess)
-
-	// bob's authorized key landed; carol's was skipped.
-	bobUUID, err := accessSvc.GetUserUUIDByName(c.Context(), bobName)
-	c.Assert(err, tc.ErrorIsNil)
-	keyManagerSvc := keymanagerservice.NewService(keymanagerstate.NewState(controllerFactory))
-	keys, err := keyManagerSvc.ListPublicKeysForUser(c.Context(), bobUUID)
-	c.Assert(err, tc.ErrorIsNil)
-	c.Check(keys, tc.HasLen, 1)
 
 	// bob's last login landed.
 	lastLogin, err := accessSvc.LastModelLogin(c.Context(), bobName, modelUUID)

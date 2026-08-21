@@ -75,10 +75,6 @@ func (*EnvelopeSuite) TestEnvelopeFromControllerModelInfo(c *tc.C) {
 			SubjectName: "fred",
 			Access:      "consume",
 		}},
-		AuthorizedKeys: []modelmigration.ModelAuthorizedKey{{
-			Username:  "fred",
-			PublicKey: "ssh-rsa AAAA",
-		}},
 		SecretBackend: &modelmigration.ModelSecretBackend{
 			Name:        "vault",
 			BackendType: "vault",
@@ -155,10 +151,6 @@ func (*EnvelopeSuite) TestEnvelopeFromControllerModelInfo(c *tc.C) {
 			GrantOn:     "offer-uuid",
 			SubjectName: "fred",
 			Access:      "consume",
-		}},
-		AuthorizedKeys: []params.ModelAuthorizedKey{{
-			Username:  "fred",
-			PublicKey: "ssh-rsa AAAA",
 		}},
 		SecretBackend: &params.ModelSecretBackend{
 			Name:        "vault",

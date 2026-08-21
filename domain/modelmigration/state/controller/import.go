@@ -18,8 +18,8 @@ import (
 // importing-phase assertion used to gate controller-data write groups, and
 // the migration-specific companion tables (model_migration_import_offer and
 // model_migration_import_external_controller_model). Application of the
-// controller-data writes themselves (permissions, users, credential,
-// authorized keys, secret backend, leadership, image metadata) is owned by
+// controller-data writes themselves (permissions, users, credential, secret
+// backend, leadership, image metadata) is owned by
 // the per-domain services the v8 import driver calls directly; this package
 // only owns the migration bookkeeping tables and the external-controller
 // compare-or-insert that has no other domain owner.

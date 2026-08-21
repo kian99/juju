@@ -155,9 +155,6 @@ type SerializedModelV2 struct {
 	// permission rows for this model, distinguished by ModelPermission.ObjectType.
 	Permissions []ModelPermission `json:"permissions,omitempty"`
 
-	// AuthorizedKeys are the SSH key authorisations for the model.
-	AuthorizedKeys []ModelAuthorizedKey `json:"authorized-keys,omitempty"`
-
 	// SecretBackend is the secret backend this model uses, by name. Nil when the
 	// model uses the controller default.
 	SecretBackend *ModelSecretBackend `json:"secret-backend,omitempty"`
@@ -280,15 +277,6 @@ type ModelPermission struct {
 	SubjectName string `json:"subject-name"`
 	// Access is the access level, e.g. "read", "admin", "consume".
 	Access string `json:"access"`
-}
-
-// ModelAuthorizedKey is an SSH public key authorised for the model, carried by
-// username and key material rather than the source-local key id.
-type ModelAuthorizedKey struct {
-	// Username is the owner of the public key.
-	Username string `json:"username"`
-	// PublicKey is the SSH public key material.
-	PublicKey string `json:"public-key"`
 }
 
 // ModelSecretBackend identifies the secret backend the model uses, by name.

@@ -20,8 +20,8 @@ import (
 // claim and migration-specific companion tables. The v8 import driver
 // (internal/migration.ModelImporter.ImportModel) calls them directly,
 // alongside the per-domain services that own the actual controller-data
-// writes (permissions, users, credential, authorized keys, secret backend,
-// leadership, image metadata).
+// writes (permissions, users, credential, secret backend, leadership, image
+// metadata).
 
 // BeginImport claims modelUUID for a new v8 import by inserting the durable
 // model_migration_import row (phase=importing) as the first target-side

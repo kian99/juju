@@ -24,8 +24,6 @@ import (
 	credentialstate "github.com/juju/juju/domain/credential/state"
 	"github.com/juju/juju/domain/export"
 	"github.com/juju/juju/domain/export/types/latest"
-	keymanagerservice "github.com/juju/juju/domain/keymanager/service"
-	keymanagerstate "github.com/juju/juju/domain/keymanager/state"
 	leaseservice "github.com/juju/juju/domain/lease/service"
 	leasestate "github.com/juju/juju/domain/lease/state"
 	domainmodel "github.com/juju/juju/domain/model"
@@ -72,8 +70,8 @@ type ImportModelArgs struct {
 // ImportControllerModelInfo applies the v8 import's controller-scoped semantic
 // data to the target controller: the durable model_migration_import claim, the
 // target-local model bootstrap (controller model row + model DB in importing
-// mode), and the users, credential, permissions, authorized keys, secret
-// backend, leadership and cloud image metadata carried by info. It writes only
+// mode), and the users, credential, permissions, secret backend, leadership
+// and cloud image metadata carried by info. It writes only
 // controller-database state; the model-DB content import and activation are
 // separate concerns handled outside this package.
 //
@@ -268,12 +266,6 @@ func newControllerImportOps(
 			modelUUID:    modelUUID,
 			modelUUIDStr: modelUUIDStr,
 			perms:        info.Permissions,
-		},
-		&opImportAuthorizedKeys{
-			keymanager:   svc.keymanager,
-			access:       svc.access,
-			modelUUIDStr: modelUUIDStr,
-			keys:         info.AuthorizedKeys,
 		},
 		&opImportSecretBackendReferences{
 			secretBackend: svc.secretBackend,
@@ -484,33 +476,6 @@ func (op *opImportPermissions) RemoveOnAbort(ctx context.Context) error {
 
 // ----
 
-type opImportAuthorizedKeys struct {
-	keymanager   *keymanagerservice.Service
-	access       *accessservice.Service
-	modelUUIDStr string
-	keys         []coremodelmigration.ModelAuthorizedKey
-}
-
-func (op *opImportAuthorizedKeys) Name() string { return "import-authorized-keys" }
-
-func (op *opImportAuthorizedKeys) Execute(ctx context.Context, st *importState) error {
-	if err := op.keymanager.ImportAuthorizedKeys(
-		ctx, op.keys, st.inactiveUsers, op.access.GetUserUUIDByName,
-	); err != nil {
-		return errors.Errorf(
-			"applying authorized keys for model %q import: %w", op.modelUUIDStr, err)
-	}
-	return nil
-}
-
-// RemoveOnAbort does nothing because controller-scoped key imports are not
-// rolled back when a model import is aborted.
-func (op *opImportAuthorizedKeys) RemoveOnAbort(ctx context.Context) error {
-	return nil
-}
-
-// ----
-
 type opImportSecretBackendReferences struct {
 	secretBackend *secretbackendservice.Service
 	modelUUID     coremodel.UUID
@@ -628,7 +593,6 @@ type importServices struct {
 	claim         *migrationclaimservice.Service
 	access        *accessservice.Service
 	credential    *credentialservice.Service
-	keymanager    *keymanagerservice.Service
 	secretBackend *secretbackendservice.Service
 	lease         *leaseservice.Service
 	cloudImage    *cloudimagemetadataservice.Service
@@ -647,9 +611,6 @@ func newImportServices(deps Deps, modelUUID coremodel.UUID) importServices {
 		),
 		credential: credentialservice.NewService(
 			credentialstate.NewState(deps.ControllerDB), deps.Logger,
-		),
-		keymanager: keymanagerservice.NewService(
-			keymanagerstate.NewState(deps.ControllerDB),
 		),
 		secretBackend: secretbackendservice.NewService(
 			secretbackendstate.NewState(deps.ControllerDB, deps.Logger), deps.Logger,
