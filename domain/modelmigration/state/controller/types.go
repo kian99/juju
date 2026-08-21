@@ -211,13 +211,6 @@ type credentialRow struct {
 	AttrValue     *string `db:"attr_value"`
 }
 
-// authorizedKeyRow is a single SSH public key authorised for the model, with
-// its owner resolved to a username.
-type authorizedKeyRow struct {
-	Username  string `db:"username"`
-	PublicKey string `db:"public_key"`
-}
-
 // modelSecretBackendRow is the model's secret backend resolved to its name and
 // type.
 type modelSecretBackendRow struct {

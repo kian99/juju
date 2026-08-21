@@ -1324,56 +1324,6 @@ func (s *stateSuite) TestGetControllerModelInfoIncludesModelQualifierUser(c *tc.
 	c.Check(foundReplacement, tc.IsTrue)
 }
 
-// TestGetControllerModelInfoIncludesAuthorizedKeyOwner verifies the user
-// profile set includes the owner of a model authorized key even when that user
-// has no model or offer permission grant, so the target can resolve the key
-// owner on import.
-func (s *stateSuite) TestGetControllerModelInfoIncludesAuthorizedKeyOwner(c *tc.C) {
-	st := New(s.TxnRunnerFactory(), clock.WallClock)
-	db := s.DB()
-
-	ownerName := usertesting.GenNewName(c, "key-owner")
-	ownerUUID := usertesting.GenUserUUID(c)
-	accessState := accessstate.NewState(s.TxnRunnerFactory(), clock.WallClock, loggertesting.WrapCheckLog(c))
-	err := accessState.AddUser(
-		c.Context(),
-		ownerUUID,
-		ownerName,
-		ownerName.Name(),
-		false,
-		s.userUUID,
-	)
-	c.Assert(err, tc.ErrorIsNil)
-
-	_, err = db.ExecContext(c.Context(),
-		`INSERT OR IGNORE INTO user_authentication (user_uuid, disabled) VALUES (?, FALSE)`,
-		ownerUUID.String())
-	c.Assert(err, tc.ErrorIsNil)
-	var keyID int64
-	err = db.QueryRowContext(c.Context(),
-		`INSERT INTO user_public_ssh_key (comment, fingerprint_hash_algorithm_id, fingerprint, public_key, user_uuid)
-		 VALUES ('comment', 1, 'fp-owner', 'ssh-ed25519 AAAAownerkey', ?) RETURNING id`,
-		ownerUUID.String()).Scan(&keyID)
-	c.Assert(err, tc.ErrorIsNil)
-	_, err = db.ExecContext(c.Context(),
-		`INSERT INTO model_authorized_keys (model_uuid, user_public_ssh_key_id) VALUES (?, ?)`,
-		s.modelUUID.String(), keyID)
-	c.Assert(err, tc.ErrorIsNil)
-
-	info, err := st.GetControllerModelInfo(c.Context(), s.modelUUID.String(), nil, nil)
-	c.Assert(err, tc.ErrorIsNil)
-
-	var foundOwner bool
-	for _, u := range info.Users {
-		if u.Name == ownerName.String() {
-			foundOwner = true
-			c.Check(u.Removed, tc.IsFalse)
-			c.Check(u.External, tc.IsFalse)
-		}
-	}
-	c.Check(foundOwner, tc.IsTrue, tc.Commentf("expected key owner in users, got %#v", info.Users))
-}
-
 // TestGetControllerModelInfoFullSet inserts a representative row for each
 // remaining controller-scoped record and verifies they are all read back,
 // including offer-scoped permissions and third-party external controllers
@@ -1397,15 +1347,6 @@ func (s *stateSuite) TestGetControllerModelInfoFullSet(c *tc.C) {
 	exec(`UPDATE cloud_credential SET invalid = TRUE, invalid_reason = 'expired'
 	      WHERE uuid = ?`, s.credentialUUID.String())
 
-	// Authorized key: requires user_authentication (for the view) + a public key.
-	exec(`INSERT OR IGNORE INTO user_authentication (user_uuid, disabled) VALUES (?, FALSE)`, userUUID)
-	var keyID int64
-	err := db.QueryRowContext(c.Context(),
-		`INSERT INTO user_public_ssh_key (comment, fingerprint_hash_algorithm_id, fingerprint, public_key, user_uuid)
-		 VALUES ('comment', 1, 'fp', 'ssh-ed25519 AAAAkey', ?) RETURNING id`, userUUID).Scan(&keyID)
-	c.Assert(err, tc.ErrorIsNil)
-	exec(`INSERT INTO model_authorized_keys (model_uuid, user_public_ssh_key_id) VALUES (?, ?)`, modelUUID, keyID)
-
 	// Leases: an application-leadership lease must surface as a leader; a
 	// singular-controller lease and a lease pin are source-local runtime state
 	// and must not travel.
@@ -1422,7 +1363,7 @@ func (s *stateSuite) TestGetControllerModelInfoFullSet(c *tc.C) {
 
 	// Secret backend reference for the model, against the internal backend.
 	var backendUUID string
-	err = db.QueryRowContext(c.Context(),
+	err := db.QueryRowContext(c.Context(),
 		`SELECT secret_backend_uuid FROM model_secret_backend WHERE model_uuid = ?`, modelUUID).Scan(&backendUUID)
 	c.Assert(err, tc.ErrorIsNil)
 	var backendName string
@@ -1482,10 +1423,6 @@ func (s *stateSuite) TestGetControllerModelInfoFullSet(c *tc.C) {
 		}
 	}
 	c.Check(foundOffer, tc.IsTrue, tc.Commentf("expected offer permission, got %#v", info.Permissions))
-
-	c.Check(info.AuthorizedKeys, tc.DeepEquals, []coremodelmigration.ModelAuthorizedKey{
-		{Username: "test-user", PublicKey: "ssh-ed25519 AAAAkey"},
-	})
 
 	c.Check(info.Leaders, tc.DeepEquals, []coremodelmigration.ApplicationLeadership{
 		{Application: "app", Leader: "app/0"},

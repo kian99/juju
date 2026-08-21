@@ -30,8 +30,6 @@ import (
 	"github.com/juju/juju/domain/credential"
 	credentialerrors "github.com/juju/juju/domain/credential/errors"
 	credentialstate "github.com/juju/juju/domain/credential/state"
-	"github.com/juju/juju/domain/keymanager"
-	keymanagerstate "github.com/juju/juju/domain/keymanager/state"
 	domainlife "github.com/juju/juju/domain/life"
 	"github.com/juju/juju/domain/model"
 	modelerrors "github.com/juju/juju/domain/model/errors"
@@ -888,29 +886,13 @@ func (m *stateSuite) TestSetModelCloudCredentialWithoutRegion(c *tc.C) {
 // deletion.
 //
 // This test is also confirming cleaning up of other resources related to the
-// model. Specifically:
-// - Authorized keys onto the model.
+// model.
 func (m *stateSuite) TestDeleteModel(c *tc.C) {
 	m.createControllerModel(c, m.controllerModelUUID, m.userUUID)
 	m.createModel(c, m.uuid, m.userUUID)
 
-	keyManagerState := keymanagerstate.NewState(m.TxnRunnerFactory())
-	err := keyManagerState.AddPublicKeysForUser(
-		c.Context(),
-		m.userUUID,
-		[]keymanager.PublicKey{
-			{
-				Comment:         "juju2@example.com",
-				FingerprintHash: keymanager.FingerprintHashAlgorithmSHA256,
-				Fingerprint:     "SHA256:+xUEnDVz0S//+1etL4rHjyopargd+HV78r0iRyx0cYw",
-				Key:             "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIN8h8XBpjS9aBUG5cdoSWubs7wT2Lc/BEZIUQCqoaOZR juju2@example.com",
-			},
-		},
-	)
-	c.Assert(err, tc.ErrorIsNil)
-
 	modelSt := NewState(m.TxnRunnerFactory())
-	err = modelSt.Delete(
+	err := modelSt.Delete(
 		c.Context(),
 		m.uuid,
 	)
@@ -930,14 +912,6 @@ func (m *stateSuite) TestDeleteModel(c *tc.C) {
 	c.Check(err, tc.ErrorIsNil)
 	c.Check(modelUUIDS, tc.DeepEquals, []coremodel.UUID{m.controllerModelUUID})
 
-	row = db.QueryRow(`
-SELECT model_uuid
-FROM model_authorized_keys
-WHERE model_uuid = ?
-	`, m.uuid)
-	// ErrNoRows is not returned by row.Err, it is deferred until row.Scan
-	// is called.
-	c.Assert(row.Scan(nil), tc.ErrorIs, sql.ErrNoRows)
 }
 
 func (m *stateSuite) TestDeleteModelNotFound(c *tc.C) {

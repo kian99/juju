@@ -982,12 +982,6 @@ func (s *userStateSuite) TestRemoveUserSSHKeys(c *tc.C) {
 	db := s.DB()
 
 	row := db.QueryRow(`
-SELECT model_uuid
-FROM model_authorized_keys
-`)
-	c.Assert(row.Scan(nil), tc.ErrorIs, sql.ErrNoRows)
-
-	row = db.QueryRow(`
 SELECT id
 FROM user_public_ssh_key
 WHERE user_uuid = ?

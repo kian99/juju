@@ -24,7 +24,7 @@ type State interface {
 
 	// Delete removes the model row and all model-scoped controller rows
 	// (model_namespace, model_secret_backend, secret_backend_reference,
-	// model_authorized_keys, permission, model_last_login) for the given model
+	// permission, model_last_login) for the given model
 	// UUID. Returns [modelerrors.NotFound] when the model does not exist.
 	Delete(ctx context.Context, uuid coremodel.UUID) error
 }

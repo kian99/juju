@@ -1146,10 +1146,7 @@ func (s *State) GetControllerModelInfo(
 		if info.ModelCredential, err = s.getModelCredential(ctx, tx, modelUUID); err != nil {
 			return errors.Capture(err)
 		}
-		if info.AuthorizedKeys, err = s.getAuthorizedKeys(ctx, tx, modelUUID); err != nil {
-			return errors.Capture(err)
-		}
-		names := modelUserNames(info.ModelInfo, info.Permissions, info.AuthorizedKeys)
+		names := modelUserNames(info.ModelInfo, info.Permissions)
 		if info.Users, err = s.getUsers(ctx, tx, modelUUID, names); err != nil {
 			return errors.Capture(err)
 		}
@@ -1340,38 +1337,6 @@ WHERE  m.uuid = $modelUUIDArg.model_uuid
 		cred.Attributes[*r.AttrKey] = derefString(r.AttrValue)
 	}
 	return cred, nil
-}
-
-// getAuthorizedKeys reads the SSH public keys authorised for the model, with
-// their owners resolved to usernames.
-func (s *State) getAuthorizedKeys(
-	ctx context.Context, tx *sqlair.TX, modelUUID string,
-) ([]coremodelmigration.ModelAuthorizedKey, error) {
-	mUUID := modelUUIDArg{ModelUUID: modelUUID}
-	stmt, err := s.Prepare(`
-SELECT u.name AS &authorizedKeyRow.username,
-       vak.public_key AS &authorizedKeyRow.public_key
-FROM   v_model_authorized_keys AS vak
-JOIN   user AS u ON u.uuid = vak.user_uuid
-WHERE  vak.model_uuid = $modelUUIDArg.model_uuid
-`, mUUID, authorizedKeyRow{})
-	if err != nil {
-		return nil, errors.Capture(err)
-	}
-
-	var rows []authorizedKeyRow
-	if err := getAll(ctx, tx, stmt, &rows, mUUID); err != nil {
-		return nil, errors.Errorf("querying authorized keys: %w", err)
-	}
-
-	keys := make([]coremodelmigration.ModelAuthorizedKey, 0, len(rows))
-	for _, k := range rows {
-		keys = append(keys, coremodelmigration.ModelAuthorizedKey{
-			Username:  k.Username,
-			PublicKey: k.PublicKey,
-		})
-	}
-	return keys, nil
 }
 
 // getUsers reads the non-authentication profiles of the named users, with each
@@ -1656,13 +1621,11 @@ WHERE  controller_uuid IN ($uuidList[:])
 }
 
 // modelUserNames returns the distinct usernames whose profiles must travel
-// with the model so the target can resolve them on import: the model
-// qualifier, the credential owner, permission subjects and authorized-key
-// owners. First-seen order is preserved.
+// with the model: the model qualifier, credential owner, and permission
+// subjects. First-seen order is preserved.
 func modelUserNames(
 	identity coremodelmigration.ModelIdentityInfo,
 	perms []coremodelmigration.ModelPermission,
-	authKeys []coremodelmigration.ModelAuthorizedKey,
 ) []string {
 	seen := make(map[string]struct{})
 	var out []string
@@ -1681,9 +1644,6 @@ func modelUserNames(
 	add(identity.CredentialOwner)
 	for _, p := range perms {
 		add(p.SubjectName)
-	}
-	for _, k := range authKeys {
-		add(k.Username)
 	}
 	return out
 }
@@ -2050,11 +2010,10 @@ AND    u.disabled = false
 //  2. permission model rows
 //  3. lease_pin, then lease
 //  4. secret_backend_reference, then model_secret_backend
-//  5. model_authorized_keys
-//  6. model_last_login
-//  7. stale model_migration_import rows (phase_type_id != 'aborting')
-//  8. model_namespace
-//  9. namespace_list
+//  5. model_last_login
+//  6. stale model_migration_import rows (phase_type_id != 'aborting')
+//  7. model_namespace
+//  8. namespace_list
 //
 // 10. model
 //
@@ -2133,15 +2092,6 @@ WHERE model_uuid = $modelUUIDArg.model_uuid
 	}
 	deleteModelSecretBackendStmt, err := s.Prepare(`
 DELETE FROM model_secret_backend
-WHERE model_uuid = $modelUUIDArg.model_uuid
-`, modelUUIDArg{})
-	if err != nil {
-		return errors.Capture(err)
-	}
-
-	// Delete model_authorized_keys.
-	deleteAuthorizedKeysStmt, err := s.Prepare(`
-DELETE FROM model_authorized_keys
 WHERE model_uuid = $modelUUIDArg.model_uuid
 `, modelUUIDArg{})
 	if err != nil {
@@ -2306,32 +2256,28 @@ WHERE  migration_uuid = $migrationUUIDArg.migration_uuid
 		if err := tx.Query(ctx, deleteModelSecretBackendStmt, modArg).Run(); err != nil {
 			return errors.Errorf("deleting model secret backend for model %q: %w", modelUUID, err)
 		}
-		// 5. Delete model_authorized_keys.
-		if err := tx.Query(ctx, deleteAuthorizedKeysStmt, modArg).Run(); err != nil {
-			return errors.Errorf("deleting authorized keys for model %q: %w", modelUUID, err)
-		}
-		// 6. Delete model_last_login.
+		// 5. Delete model_last_login.
 		if err := tx.Query(ctx, deleteModelLastLoginStmt, modArg).Run(); err != nil {
 			return errors.Errorf("deleting model last logins for model %q: %w", modelUUID, err)
 		}
-		// 7. Delete stale import claims (not aborting).
+		// 6. Delete stale import claims (not aborting).
 		if err := tx.Query(ctx, deleteImportClaimsStmt, modArg).Run(); err != nil {
 			return errors.Errorf("deleting import claims for model %q: %w", modelUUID, err)
 		}
-		// 8. Delete model_namespace.
+		// 7. Delete model_namespace.
 		if err := tx.Query(ctx, deleteModelNamespaceStmt, modArg).Run(); err != nil {
 			return errors.Errorf("deleting model namespace for model %q: %w", modelUUID, err)
 		}
-		// 9. Delete namespace_list entry.
+		// 8. Delete namespace_list entry.
 		if err := tx.Query(ctx, deleteNamespaceListStmt, modArg).Run(); err != nil {
 			return errors.Errorf("deleting namespace list for model %q: %w", modelUUID, err)
 		}
-		// 10. Delete the model row.
+		// 9. Delete the model row.
 		if err := tx.Query(ctx, deleteModelStmt, modArg).Run(); err != nil {
 			return errors.Errorf("deleting model %q: %w", modelUUID, err)
 		}
 
-		// 11. Stage the model database deletion. The namespace was just
+		// 10. Stage the model database deletion. The namespace was just
 		//     removed from namespace_list, so the dqlite database now outlives
 		//     the model and is deleted asynchronously by the model DB deleter
 		//     worker.

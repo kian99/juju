@@ -513,16 +513,6 @@ func (st *UserState) RemoveUser(ctx context.Context, name user.Name) error {
 		return errors.Capture(err)
 	}
 
-	deleteModelAuthorizedKeysStmt, err := st.Prepare(`
-DELETE FROM model_authorized_keys
-WHERE user_public_ssh_key_id IN (SELECT id
-								 FROM user_public_ssh_key as upsk
-								 WHERE upsk.user_uuid = $userUUID.uuid)
-	`, userUUID{})
-	if err != nil {
-		return errors.Errorf("preparing delete model authorized keys query for user: %w", err)
-	}
-
 	deleteUserPublicSSHKeysStmt, err := st.Prepare(
 		"DELETE FROM user_public_ssh_key WHERE user_uuid = $userUUID.uuid", userUUID{},
 	)
@@ -561,10 +551,6 @@ WHERE user_public_ssh_key_id IN (SELECT id
 		}
 
 		uuidArgs := userUUID{UUID: uuid.String()}
-
-		if err := tx.Query(ctx, deleteModelAuthorizedKeysStmt, uuidArgs).Run(); err != nil {
-			return errors.Errorf("deleting model authorized keys for %q: %w", name, err)
-		}
 
 		if err := tx.Query(ctx, deleteUserPublicSSHKeysStmt, uuidArgs).Run(); err != nil {
 			return errors.Errorf("deleting user publish ssh keys for %q: %w", name, err)

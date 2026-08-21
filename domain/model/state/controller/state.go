@@ -943,7 +943,6 @@ func (s *State) Delete(
 	queries := []string{
 		`DELETE FROM model_secret_backend WHERE model_uuid = $dbUUID.uuid`,
 		`DELETE FROM secret_backend_reference WHERE model_uuid = $dbUUID.uuid`,
-		`DELETE FROM model_authorized_keys WHERE model_uuid = $dbUUID.uuid`,
 		`DELETE FROM permission WHERE grant_on = $dbUUID.uuid`,
 		`DELETE FROM model_last_login WHERE model_uuid = $dbUUID.uuid`,
 	}
