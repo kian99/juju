@@ -268,6 +268,97 @@ run_offer_find_external_user() {
 	destroy_controller "ctrl-extuser-idp"
 }
 
+run_offer_consume_shared_relations() {
+	echo
+	local file offer_model consume_model offer_url first_pid second_pid cycle
+	file="${TEST_DIR}/test-offer-consume-shared-relations.log"
+	offer_model="model-offer-shared"
+	consume_model="model-consume-shared"
+	offer_url="admin/${offer_model}.dummy-offer"
+
+	# Deploy the source and two consumers in separate models.
+	ensure "${offer_model}" "${file}"
+	juju deploy juju-qa-dummy-source --base ubuntu@22.04
+	wait_for "dummy-source" "$(idle_condition "dummy-source")"
+
+	juju add-model "${consume_model}"
+	juju switch "${consume_model}"
+	juju deploy juju-qa-dummy-sink first-sink --base ubuntu@22.04
+	juju deploy juju-qa-dummy-sink second-sink --base ubuntu@22.04
+	wait_for "first-sink" "$(idle_condition "first-sink")"
+	wait_for "second-sink" "$(idle_condition "second-sink")"
+
+	# Repeat after removing the offer and SAAS to exercise full recreation.
+	for cycle in 1 2; do
+		# Both relations share one consumed application.
+		juju switch "${offer_model}"
+		juju offer dummy-source:sink dummy-offer
+		juju config dummy-source token=shared-relations
+
+		juju switch "${consume_model}"
+		juju consume "${BOOTSTRAPPED_JUJU_CTRL_NAME}:${offer_url}"
+		juju integrate first-sink:source dummy-offer:sink
+		juju integrate second-sink:source dummy-offer:sink
+
+		# Wait for consumer agents and source connections before teardown.
+		wait_for "dummy-offer" '.applications["first-sink"].relations.source[0]'
+		wait_for "dummy-offer" '.applications["second-sink"].relations.source[0]'
+		wait_for "active" '."application-endpoints"["dummy-offer"]."application-status".current'
+		wait_for "first-sink" "$(idle_condition "first-sink")"
+		wait_for "second-sink" "$(idle_condition "second-sink")"
+		juju switch "${offer_model}"
+		wait_for 2 '.offers["dummy-offer"]."active-connected-count"'
+		juju switch "${consume_model}"
+
+		if [[ ${cycle} == 1 ]]; then
+			# Removing one relation must leave the other connected.
+			juju remove-relation first-sink:source dummy-offer:sink
+			wait_for null '.applications["first-sink"].relations'
+			juju status --format json | yq -r '.applications["second-sink"].relations.source[0]' | check dummy-offer
+			juju switch "${offer_model}"
+			wait_for 1 '.offers["dummy-offer"]."active-connected-count"'
+
+			# Restore the first relation before concurrent deletion.
+			juju switch "${consume_model}"
+			juju integrate first-sink:source dummy-offer:sink
+			wait_for "dummy-offer" '.applications["first-sink"].relations.source[0]'
+			wait_for "first-sink" "$(idle_condition "first-sink")"
+			juju switch "${offer_model}"
+			wait_for 2 '.offers["dummy-offer"]."active-connected-count"'
+			juju switch "${consume_model}"
+		fi
+
+		# Collect both deletion results, even if one command fails.
+		juju remove-relation first-sink:source dummy-offer:sink &
+		first_pid=$!
+		juju remove-relation second-sink:source dummy-offer:sink &
+		second_pid=$!
+
+		local first_exit=0 second_exit=0
+		wait "${first_pid}" || first_exit=$?
+		wait "${second_pid}" || second_exit=$?
+		printf '%s\n' "${first_exit}" | check '^0$'
+		printf '%s\n' "${second_exit}" | check '^0$'
+
+		# Destination removal must eventually clear source connections too.
+		wait_for null '.applications["first-sink"].relations'
+		wait_for null '.applications["second-sink"].relations'
+		juju switch "${offer_model}"
+		wait_for null '.offers["dummy-offer"]."total-connected-count"'
+
+		# Remove both sides so the next cycle starts with a fresh offer.
+		juju remove-offer "${offer_url}" -y
+		wait_for null '.offers'
+
+		juju switch "${consume_model}"
+		juju remove-saas dummy-offer
+		wait_for null '."application-endpoints"'
+	done
+
+	destroy_model "${offer_model}"
+	destroy_model "${consume_model}"
+}
+
 test_offer_consume() {
 	if [ "$(skip 'test_offer_consume')" ]; then
 		echo "==> TEST SKIPPED: offer consume"
@@ -280,6 +371,7 @@ test_offer_consume() {
 		cd .. || exit
 
 		run "run_offer_consume"
+		run "run_offer_consume_shared_relations"
 		run "run_offer_consume_cross_controller"
 	)
 }

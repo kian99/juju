@@ -25,8 +25,8 @@ type RelationWithRemoteOfferer interface {
 	RelationWithRemoteOffererExists(ctx context.Context, rUUID string) (bool, error)
 
 	// EnsureRelationWithRemoteOffererNotAliveCascade ensures that the relation
-	// identified by the input UUID is not alive, and sets the synthetic units
-	// in scope of this relation to dead.
+	// identified by the input UUID is not alive. Synthetic units in its scope
+	// are set to dead unless they remain in scope of another alive relation.
 	EnsureRelationWithRemoteOffererNotAliveCascade(ctx context.Context, rUUID string) (internal.CascadedRelationWithRemoteOffererLives, error)
 
 	// RelationWithRemoteOffererScheduleRemoval schedules a removal job for the
@@ -66,6 +66,14 @@ func (s *Service) RemoveRelationWithRemoteOfferer(
 		return "", errors.Errorf("setting remote relation %q to dying: %w", relUUID, err)
 	}
 
+	// Depart synthetic units before scheduling removal, since the removal
+	// worker only waits for local units to leave scope.
+	for _, r := range res.SyntheticRelationUnitUUIDs {
+		if err := s.modelState.LeaveScope(ctx, r); err != nil {
+			return "", errors.Errorf("leaving scope for synthetic relation unit %q: %w", r, err)
+		}
+	}
+
 	var jUUID removal.UUID
 	if force {
 		if wait > 0 {
@@ -87,15 +95,6 @@ func (s *Service) RemoveRelationWithRemoteOfferer(
 	jUUID, err = s.relationWithRemoteOffererScheduleRemoval(ctx, relUUID, force, wait)
 	if err != nil {
 		return "", errors.Errorf("scheduling removal job for remote relation %q: %w", relUUID, err)
-	}
-
-	// Depart the synthetic units here ourselves, since synthetic units don't
-	// have their own uniter.
-	// TODO: This should ideally be handled in the same transaction as the cascade
-	for _, r := range res.SyntheticRelationUnitUUIDs {
-		if err := s.modelState.LeaveScope(ctx, r); err != nil {
-			return "", errors.Errorf("leaving scope for synthetic relation unit %q: %w", r, err)
-		}
 	}
 
 	return jUUID, nil

@@ -12,8 +12,10 @@ import (
 	"github.com/juju/clock/testclock"
 	"github.com/juju/tc"
 
+	coreapplication "github.com/juju/juju/core/application"
 	coremodel "github.com/juju/juju/core/model"
 	"github.com/juju/juju/core/network"
+	corerelation "github.com/juju/juju/core/relation"
 	"github.com/juju/juju/core/unit"
 	domaincharm "github.com/juju/juju/domain/application/charm"
 	applicationservice "github.com/juju/juju/domain/application/service"
@@ -476,6 +478,154 @@ WHERE u.name = ?`, "foo/0").Scan(&relUnitUUID)
 }
 
 func (s *relationSuite) TestLeaveScopeSyntheticUnitsInMultipleRelations(c *tc.C) {
+	synthAppUUID, rel1UUID, rel2UUID := s.createSharedRemoteOffererRelations(c)
+	st := NewState(s.TxnRunnerFactory(), loggertesting.WrapCheckLog(c))
+
+	artifacts, err := st.EnsureRelationWithRemoteOffererNotAliveCascade(c.Context(), rel1UUID.String())
+	c.Assert(err, tc.ErrorIsNil)
+	c.Check(artifacts.SyntheticRelationUnitUUIDs, tc.HasLen, 3)
+	err = s.setupRelationService(c).SetRelationRemoteApplicationAndUnitSettings(
+		c.Context(), synthAppUUID, rel1UUID, nil,
+		map[unit.Name]map[string]string{"foo/0": {"stale": "update"}},
+	)
+	c.Check(err, tc.ErrorIs, relationerrors.CannotEnterScopeNotAlive)
+	for _, relUnitUUID := range artifacts.SyntheticRelationUnitUUIDs {
+		err = st.LeaveScope(c.Context(), relUnitUUID)
+		c.Assert(err, tc.ErrorIsNil)
+	}
+
+	var aliveUnits int
+	err = s.DB().QueryRowContext(c.Context(), `
+SELECT COUNT(*) FROM unit WHERE application_uuid = ? AND life_id = 0`, synthAppUUID.String()).Scan(&aliveUnits)
+	c.Assert(err, tc.ErrorIsNil)
+	c.Check(aliveUnits, tc.Equals, 3)
+	var inScope int
+	err = s.DB().QueryRowContext(c.Context(), `
+SELECT COUNT(*) FROM relation_unit AS ru
+JOIN relation_endpoint AS re ON ru.relation_endpoint_uuid = re.uuid
+WHERE re.relation_uuid = ?`, rel1UUID.String()).Scan(&inScope)
+	c.Assert(err, tc.ErrorIsNil)
+	c.Check(inScope, tc.Equals, 0)
+	err = s.DB().QueryRowContext(c.Context(), `
+SELECT COUNT(*) FROM relation_unit AS ru
+JOIN relation_endpoint AS re ON ru.relation_endpoint_uuid = re.uuid
+WHERE re.relation_uuid = ?`, rel2UUID.String()).Scan(&inScope)
+	c.Assert(err, tc.ErrorIsNil)
+	c.Check(inScope, tc.Equals, 3)
+	relationLife, err := st.GetRelationLife(c.Context(), rel2UUID.String())
+	c.Assert(err, tc.ErrorIsNil)
+	c.Check(relationLife, tc.Equals, life.Alive)
+	var settings int
+	err = s.DB().QueryRowContext(c.Context(), `
+SELECT COUNT(*)
+FROM relation_unit_setting AS rus
+JOIN relation_unit AS ru ON rus.relation_unit_uuid = ru.uuid
+JOIN relation_endpoint AS re ON ru.relation_endpoint_uuid = re.uuid
+WHERE re.relation_uuid = ? AND rus.key = 'da' AND rus.value = 'do'`, rel2UUID.String()).Scan(&settings)
+	c.Assert(err, tc.ErrorIsNil)
+	c.Check(settings, tc.Equals, 3)
+
+	artifacts, err = st.EnsureRelationWithRemoteOffererNotAliveCascade(c.Context(), rel2UUID.String())
+	c.Assert(err, tc.ErrorIsNil)
+	c.Check(artifacts.SyntheticRelationUnitUUIDs, tc.HasLen, 3)
+	for _, relUnitUUID := range artifacts.SyntheticRelationUnitUUIDs {
+		err = st.LeaveScope(c.Context(), relUnitUUID)
+		c.Assert(err, tc.ErrorIsNil)
+	}
+	var units int
+	err = s.DB().QueryRowContext(c.Context(), `
+SELECT COUNT(*) FROM unit WHERE application_uuid = ?`, synthAppUUID.String()).Scan(&units)
+	c.Assert(err, tc.ErrorIsNil)
+	c.Check(units, tc.Equals, 0)
+}
+
+func (s *relationSuite) TestRemoveSharedRemoteOffererRelationsConcurrentRecreated(c *tc.C) {
+	synthAppUUID, rel1UUID, rel2UUID := s.createSharedRemoteOffererRelations(c)
+	st := NewState(s.TxnRunnerFactory(), loggertesting.WrapCheckLog(c))
+	ctx := c.Context()
+
+	for cycle := range 3 {
+		previousRelUUID := rel1UUID
+		results := make(chan error, 2)
+		start := make(chan struct{})
+		for _, relUUID := range []corerelation.UUID{rel1UUID, rel2UUID} {
+			go func() {
+				<-start
+				artifacts, err := st.EnsureRelationWithRemoteOffererNotAliveCascade(ctx, relUUID.String())
+				if err == nil {
+					for _, relUnitUUID := range artifacts.SyntheticRelationUnitUUIDs {
+						if err = st.LeaveScope(ctx, relUnitUUID); err != nil {
+							break
+						}
+					}
+				}
+				results <- err
+			}()
+		}
+		close(start)
+		for range 2 {
+			c.Check(<-results, tc.ErrorIsNil)
+		}
+		for _, relUUID := range []corerelation.UUID{rel1UUID, rel2UUID} {
+			var inScope int
+			err := s.DB().QueryRowContext(ctx, `
+SELECT COUNT(*) FROM relation_unit AS ru
+JOIN relation_endpoint AS re ON ru.relation_endpoint_uuid = re.uuid
+WHERE re.relation_uuid = ?`, relUUID.String()).Scan(&inScope)
+			c.Assert(err, tc.ErrorIsNil)
+			c.Check(inScope, tc.Equals, 0)
+			err = st.DeleteRelationWithRemoteOfferer(ctx, relUUID.String())
+			c.Assert(err, tc.ErrorIsNil)
+		}
+		var units int
+		err := s.DB().QueryRowContext(ctx, `
+SELECT COUNT(*) FROM unit WHERE application_uuid = ?`, synthAppUUID.String()).Scan(&units)
+		c.Assert(err, tc.ErrorIsNil)
+		c.Check(units, tc.Equals, 0)
+		if cycle == 2 {
+			break
+		}
+
+		relSvc := s.setupRelationService(c)
+		for _, appName := range []string{"bar1", "bar2"} {
+			_, _, err := relSvc.AddRelation(ctx, "foo:foo", appName+":bar")
+			c.Assert(err, tc.ErrorIsNil)
+		}
+		rel1UUID, err = relSvc.GetRelationUUIDForRemoval(ctx, domainrelation.GetRelationUUIDForRemovalArgs{
+			Endpoints: []string{"foo:foo", "bar1:bar"},
+		})
+		c.Assert(err, tc.ErrorIsNil)
+		rel2UUID, err = relSvc.GetRelationUUIDForRemoval(ctx, domainrelation.GetRelationUUIDForRemovalArgs{
+			Endpoints: []string{"foo:foo", "bar2:bar"},
+		})
+		c.Assert(err, tc.ErrorIsNil)
+		cmrState := crossmodelrelationstate.NewState(
+			s.TxnRunnerFactory(), coremodel.UUID(s.ModelUUID()), testclock.NewClock(s.now), loggertesting.WrapCheckLog(c),
+		)
+		err = cmrState.EnsureUnitsExist(ctx, synthAppUUID.String(), []string{"foo/0", "foo/1", "foo/2"})
+		c.Assert(err, tc.ErrorIsNil)
+		for _, relUUID := range []corerelation.UUID{rel1UUID, rel2UUID} {
+			err = relSvc.SetRelationRemoteApplicationAndUnitSettings(ctx, synthAppUUID, relUUID,
+				map[string]string{"do": "da"},
+				map[unit.Name]map[string]string{
+					"foo/0": {"do": "da"},
+					"foo/1": {"do": "da"},
+					"foo/2": {"do": "da"},
+				},
+			)
+			c.Assert(err, tc.ErrorIsNil)
+		}
+		c.Check(rel1UUID, tc.Not(tc.Equals), previousRelUUID)
+		err = relSvc.SetRelationRemoteApplicationAndUnitSettings(ctx, synthAppUUID, previousRelUUID, nil,
+			map[unit.Name]map[string]string{"foo/0": {"stale": "update"}},
+		)
+		c.Check(err, tc.ErrorIs, relationerrors.RelationNotFound)
+	}
+}
+
+func (s *relationSuite) createSharedRemoteOffererRelations(c *tc.C) (
+	coreapplication.UUID, corerelation.UUID, corerelation.UUID,
+) {
 	// Arrange
 	synthAppUUID, _ := s.createRemoteApplicationOfferer(c, "foo")
 
@@ -532,28 +682,7 @@ func (s *relationSuite) TestLeaveScopeSyntheticUnitsInMultipleRelations(c *tc.C)
 	)
 	c.Assert(err, tc.ErrorIsNil)
 
-	var relUnitUUID string
-	err = s.TxnRunner().StdTxn(c.Context(), func(ctx context.Context, tx *sql.Tx) error {
-		err := tx.QueryRowContext(ctx, `
-SELECT ru.uuid
-FROM relation_unit AS ru
-JOIN unit AS u ON ru.unit_uuid = u.uuid
-WHERE u.name = ?`, "foo/0").Scan(&relUnitUUID)
-		if err != nil {
-			return err
-		}
-
-		return nil
-	})
-	c.Assert(err, tc.ErrorIsNil)
-
-	st := NewState(s.TxnRunnerFactory(), loggertesting.WrapCheckLog(c))
-
-	// Act
-	err = st.LeaveScope(c.Context(), relUnitUUID)
-
-	// Assert
-	c.Assert(err, tc.ErrorIsNil)
+	return synthAppUUID, rel1UUID, rel2UUID
 }
 
 func (s *relationSuite) TestLeaveScopeRelationUnitNotFound(c *tc.C) {
