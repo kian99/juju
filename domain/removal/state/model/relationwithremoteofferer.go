@@ -55,8 +55,8 @@ AND    cs.name = 'cmr'`, remoteRelationUUID)
 }
 
 // EnsureRelationWithRemoteOffererNotAliveCascade ensures that the relation
-// identified by the input UUID is not alive. Synthetic units in its scope are
-// set to dead only if they are not in scope of another alive relation.
+// identified by the input UUID is not alive and departs its synthetic units
+// atomically. Units shared with another relation are retained.
 func (st *State) EnsureRelationWithRemoteOffererNotAliveCascade(ctx context.Context, rUUID string) (internal.CascadedRelationWithRemoteOffererLives, error) {
 	db, err := st.DB(ctx)
 	if err != nil {
@@ -128,6 +128,12 @@ AND    uuid IN (SELECT du.uuid FROM departing_units AS du)
 		err = tx.Query(ctx, updateSyntheticUnitStmt, remoteRelationUUID).Run()
 		if err != nil {
 			return errors.Errorf("advancing remote relation synthetic unit life: %w", err)
+		}
+
+		for _, relationUnitUUID := range synthRelationUnitUUIDs {
+			if err := st.leaveScope(ctx, tx, relationUnitUUID); err != nil {
+				return errors.Errorf("departing synthetic relation unit: %w", err)
+			}
 		}
 
 		return nil

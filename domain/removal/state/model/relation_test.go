@@ -489,10 +489,6 @@ func (s *relationSuite) TestLeaveScopeSyntheticUnitsInMultipleRelations(c *tc.C)
 		map[unit.Name]map[string]string{"foo/0": {"stale": "update"}},
 	)
 	c.Check(err, tc.ErrorIs, relationerrors.CannotEnterScopeNotAlive)
-	for _, relUnitUUID := range artifacts.SyntheticRelationUnitUUIDs {
-		err = st.LeaveScope(c.Context(), relUnitUUID)
-		c.Assert(err, tc.ErrorIsNil)
-	}
 
 	var aliveUnits int
 	err = s.DB().QueryRowContext(c.Context(), `
@@ -528,10 +524,6 @@ WHERE re.relation_uuid = ? AND rus.key = 'da' AND rus.value = 'do'`, rel2UUID.St
 	artifacts, err = st.EnsureRelationWithRemoteOffererNotAliveCascade(c.Context(), rel2UUID.String())
 	c.Assert(err, tc.ErrorIsNil)
 	c.Check(artifacts.SyntheticRelationUnitUUIDs, tc.HasLen, 3)
-	for _, relUnitUUID := range artifacts.SyntheticRelationUnitUUIDs {
-		err = st.LeaveScope(c.Context(), relUnitUUID)
-		c.Assert(err, tc.ErrorIsNil)
-	}
 	var units int
 	err = s.DB().QueryRowContext(c.Context(), `
 SELECT COUNT(*) FROM unit WHERE application_uuid = ?`, synthAppUUID.String()).Scan(&units)
@@ -546,24 +538,17 @@ func (s *relationSuite) TestRemoveSharedRemoteOffererRelationsConcurrentRecreate
 
 	for cycle := range 3 {
 		previousRelUUID := rel1UUID
-		results := make(chan error, 2)
+		results := make(chan error, 4)
 		start := make(chan struct{})
-		for _, relUUID := range []corerelation.UUID{rel1UUID, rel2UUID} {
+		for _, relUUID := range []corerelation.UUID{rel1UUID, rel1UUID, rel2UUID, rel2UUID} {
 			go func() {
 				<-start
-				artifacts, err := st.EnsureRelationWithRemoteOffererNotAliveCascade(ctx, relUUID.String())
-				if err == nil {
-					for _, relUnitUUID := range artifacts.SyntheticRelationUnitUUIDs {
-						if err = st.LeaveScope(ctx, relUnitUUID); err != nil {
-							break
-						}
-					}
-				}
+				_, err := st.EnsureRelationWithRemoteOffererNotAliveCascade(ctx, relUUID.String())
 				results <- err
 			}()
 		}
 		close(start)
-		for range 2 {
+		for range 4 {
 			c.Check(<-results, tc.ErrorIsNil)
 		}
 		for _, relUUID := range []corerelation.UUID{rel1UUID, rel2UUID} {

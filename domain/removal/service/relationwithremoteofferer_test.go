@@ -98,12 +98,11 @@ func (s *relationWithRemoteOffererSuite) TestRemoveRelationWithRemoteOffererDepa
 
 	exp := s.modelState.EXPECT()
 	exp.RelationWithRemoteOffererExists(gomock.Any(), relUUID.String()).Return(true, nil)
-	exp.EnsureRelationWithRemoteOffererNotAliveCascade(gomock.Any(), relUUID.String()).Return(internal.CascadedRelationWithRemoteOffererLives{
-		SyntheticRelationUnitUUIDs: []string{relUnitUUID1.String(), relUnitUUID2.String()},
-	}, nil)
 	gomock.InOrder(
-		exp.LeaveScope(gomock.Any(), relUnitUUID1.String()).Return(nil),
-		exp.LeaveScope(gomock.Any(), relUnitUUID2.String()).Return(nil),
+		exp.EnsureRelationWithRemoteOffererNotAliveCascade(gomock.Any(), relUUID.String()).Return(
+			internal.CascadedRelationWithRemoteOffererLives{
+				SyntheticRelationUnitUUIDs: []string{relUnitUUID1.String(), relUnitUUID2.String()},
+			}, nil),
 		exp.RelationWithRemoteOffererScheduleRemoval(
 			gomock.Any(), gomock.Any(), relUUID.String(), false, when.UTC()).Return(nil),
 	)
@@ -127,14 +126,10 @@ func (s *relationWithRemoteOffererSuite) TestRemoveRelationWithRemoteOffererNotF
 func (s *relationWithRemoteOffererSuite) TestRemoveRelationWithRemoteOffererScopeCleanupError(c *tc.C) {
 	defer s.setupMocks(c).Finish()
 	relUUID := tc.Must(c, relation.NewUUID)
-	relUnitUUID := tc.Must(c, relation.NewUnitUUID)
 	exp := s.modelState.EXPECT()
 	exp.RelationWithRemoteOffererExists(gomock.Any(), relUUID.String()).Return(true, nil)
 	exp.EnsureRelationWithRemoteOffererNotAliveCascade(gomock.Any(), relUUID.String()).Return(
-		internal.CascadedRelationWithRemoteOffererLives{
-			SyntheticRelationUnitUUIDs: []string{relUnitUUID.String()},
-		}, nil)
-	exp.LeaveScope(gomock.Any(), relUnitUUID.String()).Return(relationerrors.RelationUnitNotFound)
+		internal.CascadedRelationWithRemoteOffererLives{}, relationerrors.RelationUnitNotFound)
 
 	_, err := s.newService(c).RemoveRelationWithRemoteOfferer(c.Context(), relUUID, false, 0)
 	c.Check(err, tc.ErrorIs, relationerrors.RelationUnitNotFound)
