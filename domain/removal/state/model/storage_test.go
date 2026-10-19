@@ -34,6 +34,31 @@ func TestStorageSuite(t *testing.T) {
 	tc.Run(t, &storageSuite{})
 }
 
+type caasStorageSuite struct {
+	baseSuite
+}
+
+func TestCAASStorageSuite(t *testing.T) {
+	tc.Run(t, &caasStorageSuite{})
+}
+
+func (s *caasStorageSuite) SetUpTest(c *tc.C) {
+	s.baseSuite.setUpTest(c)
+	s.addModel(c, "caas")
+}
+
+type storageModelTypeSuite struct {
+	baseSuite
+}
+
+func TestStorageModelTypeSuite(t *testing.T) {
+	tc.Run(t, &storageModelTypeSuite{})
+}
+
+func (s *storageModelTypeSuite) SetUpTest(c *tc.C) {
+	s.baseSuite.setUpTest(c)
+}
+
 func (s *storageSuite) TestStorageAttachmentExists(c *tc.C) {
 	ctx := c.Context()
 
@@ -200,6 +225,223 @@ func (s *storageSuite) TestDeleteStorageAttachmentSuccess(c *tc.C) {
 	row = s.DB().QueryRowContext(
 		ctx, "SELECT unit_uuid FROM storage_unit_owner WHERE storage_instance_uuid = ?", siUUID)
 	c.Check(row.Scan(&dummy), tc.ErrorIs, sql.ErrNoRows)
+}
+
+func (s *caasStorageSuite) TestUnprovisionedCAASStorageRemoval(c *tc.C) {
+	// An unschedulable pod leaves pending storage but no unit registration.
+	// Graceful removal must complete without an agent to acknowledge detachment.
+	siUUID, saUUID := s.addAppUnitStorage(c)
+	fsUUID, fsaUUID := s.addAttachedFilesystem(c)
+	s.addStorageInstanceFilesystem(c, siUUID, fsUUID)
+	st := NewState(s.TxnRunnerFactory(), loggertesting.WrapCheckLog(c))
+	_, err := st.EnsureApplicationNotAliveCascade(c.Context(), "some-app-uuid", true)
+	c.Assert(err, tc.ErrorIsNil)
+
+	l, err := st.GetStorageAttachmentLife(c.Context(), saUUID)
+	c.Assert(err, tc.ErrorIsNil)
+	c.Check(l, tc.Equals, life.Dying)
+	l, err = st.GetFilesystemAttachmentLife(c.Context(), fsaUUID)
+	c.Assert(err, tc.ErrorIsNil)
+	c.Check(l, tc.Equals, life.Alive)
+	err = st.MarkUnitAsDeadWithNoEntities(c.Context(), "some-unit-uuid")
+	c.Assert(err, tc.ErrorIs, removalerrors.EntityStillAlive)
+
+	cascade, err := st.EnsureStorageAttachmentDeadCascadeIfUnprovisioned(c.Context(), saUUID)
+	c.Assert(err, tc.ErrorIsNil)
+	c.Check(cascade, tc.DeepEquals, internal.CascadedStorageProvisionedAttachmentLives{
+		FileSystemAttachmentUUIDs: []string{fsaUUID},
+	})
+	l, err = st.GetStorageAttachmentLife(c.Context(), saUUID)
+	c.Assert(err, tc.ErrorIsNil)
+	c.Check(l, tc.Equals, life.Dead)
+	l, err = st.GetFilesystemAttachmentLife(c.Context(), fsaUUID)
+	c.Assert(err, tc.ErrorIsNil)
+	c.Check(l, tc.Equals, life.Dead)
+	l, err = st.GetFilesystemLife(c.Context(), fsUUID)
+	c.Assert(err, tc.ErrorIsNil)
+	c.Check(l, tc.Equals, life.Dead)
+
+	_, err = st.EnsureStorageAttachmentDeadCascadeIfUnprovisioned(c.Context(), saUUID)
+	c.Assert(err, tc.ErrorIsNil)
+	c.Assert(st.DeleteStorageAttachment(c.Context(), saUUID), tc.ErrorIsNil)
+	c.Assert(st.MarkUnitAsDeadWithNoEntities(c.Context(), "some-unit-uuid"), tc.ErrorIsNil)
+	c.Assert(st.DeleteUnit(c.Context(), "some-unit-uuid", false), tc.ErrorIsNil)
+	c.Assert(st.DeleteFilesystemAttachment(c.Context(), fsaUUID), tc.ErrorIsNil)
+	c.Assert(st.DeleteFilesystem(c.Context(), fsUUID), tc.ErrorIsNil)
+	c.Assert(st.DeleteStorageInstance(c.Context(), siUUID), tc.ErrorIsNil)
+	c.Assert(st.MarkApplicationAsDead(c.Context(), "some-app-uuid"), tc.ErrorIsNil)
+	c.Assert(st.DeleteApplication(c.Context(), "some-app-uuid", false), tc.ErrorIsNil)
+	exists, err := st.ApplicationExists(c.Context(), "some-app-uuid")
+	c.Assert(err, tc.ErrorIsNil)
+	c.Check(exists, tc.IsFalse)
+}
+
+func (s *caasStorageSuite) TestUnprovisionedStorageRemovalRequiresAcknowledgement(c *tc.C) {
+	siUUID, saUUID := s.addAppUnitStorage(c)
+	fsUUID, fsaUUID := s.addAttachedFilesystem(c)
+	s.addStorageInstanceFilesystem(c, siUUID, fsUUID)
+	s.setStorageAttachmentLife(c, saUUID, int(life.Dying))
+	st := NewState(s.TxnRunnerFactory(), loggertesting.WrapCheckLog(c))
+	_, err := s.DB().Exec(`
+UPDATE application SET life_id = 1;
+UPDATE unit SET life_id = 1;`)
+	c.Assert(err, tc.ErrorIsNil)
+
+	for _, test := range []struct {
+		name  string
+		query string
+	}{
+		{"agent password", "UPDATE unit SET password_hash = 'password-hash'"},
+		{"empty agent password", "UPDATE unit SET password_hash = ''"},
+		{"pod registration", "INSERT INTO k8s_pod (unit_uuid, provider_id) VALUES ('some-unit-uuid', 'test-0')"},
+		{"empty pod provider ID", "INSERT INTO k8s_pod (unit_uuid, provider_id) VALUES ('some-unit-uuid', '')"},
+	} {
+		_, err := s.DB().Exec(`
+UPDATE unit SET password_hash = NULL;
+DELETE FROM k8s_pod;`)
+		c.Assert(err, tc.ErrorIsNil)
+		_, err = s.DB().Exec(test.query)
+		c.Assert(err, tc.ErrorIsNil)
+
+		_, err = st.EnsureStorageAttachmentDeadCascadeIfUnprovisioned(c.Context(), saUUID)
+		c.Check(err, tc.ErrorIs, removalerrors.EntityNotDead, tc.Commentf("%s", test.name))
+		l, err := st.GetStorageAttachmentLife(c.Context(), saUUID)
+		c.Assert(err, tc.ErrorIsNil)
+		c.Check(l, tc.Equals, life.Dying, tc.Commentf("%s", test.name))
+		l, err = st.GetFilesystemAttachmentLife(c.Context(), fsaUUID)
+		c.Assert(err, tc.ErrorIsNil)
+		c.Check(l, tc.Equals, life.Alive, tc.Commentf("%s", test.name))
+	}
+}
+
+func (s *caasStorageSuite) TestUnprovisionedStorageRemovalRollback(c *tc.C) {
+	siUUID, saUUID := s.addAppUnitStorage(c)
+	fsUUID, fsaUUID := s.addAttachedFilesystem(c)
+	s.addStorageInstanceFilesystem(c, siUUID, fsUUID)
+	_, err := s.DB().Exec(`
+CREATE TRIGGER fail_unprovisioned_detachment
+BEFORE UPDATE OF life_id ON storage_filesystem_attachment
+WHEN NEW.life_id = 2
+BEGIN
+    SELECT RAISE(ABORT, 'detachment failed');
+END;`)
+	c.Assert(err, tc.ErrorIsNil)
+	st := NewState(s.TxnRunnerFactory(), loggertesting.WrapCheckLog(c))
+	_, err = st.EnsureApplicationNotAliveCascade(c.Context(), "some-app-uuid", true)
+	c.Assert(err, tc.ErrorIsNil)
+
+	_, err = st.EnsureStorageAttachmentDeadCascadeIfUnprovisioned(c.Context(), saUUID)
+	c.Assert(err, tc.ErrorMatches, ".*detachment failed")
+	l, err := st.GetStorageAttachmentLife(c.Context(), saUUID)
+	c.Assert(err, tc.ErrorIsNil)
+	c.Check(l, tc.Equals, life.Dying)
+	l, err = st.GetFilesystemAttachmentLife(c.Context(), fsaUUID)
+	c.Assert(err, tc.ErrorIsNil)
+	c.Check(l, tc.Equals, life.Alive)
+	l, err = st.GetFilesystemLife(c.Context(), fsUUID)
+	c.Assert(err, tc.ErrorIsNil)
+	c.Check(l, tc.Equals, life.Dying)
+
+	_, err = s.DB().Exec("DROP TRIGGER fail_unprovisioned_detachment")
+	c.Assert(err, tc.ErrorIsNil)
+	_, err = st.EnsureStorageAttachmentDeadCascadeIfUnprovisioned(c.Context(), saUUID)
+	c.Assert(err, tc.ErrorIsNil)
+	l, err = st.GetFilesystemLife(c.Context(), fsUUID)
+	c.Assert(err, tc.ErrorIsNil)
+	c.Check(l, tc.Equals, life.Dead)
+}
+
+func (s *caasStorageSuite) TestUnprovisionedStorageRemovalRetainsStorage(c *tc.C) {
+	siUUID, saUUID := s.addAppUnitStorage(c)
+	fsUUID, fsaUUID := s.addAttachedFilesystem(c)
+	s.addStorageInstanceFilesystem(c, siUUID, fsUUID)
+	st := NewState(s.TxnRunnerFactory(), loggertesting.WrapCheckLog(c))
+	_, err := st.EnsureApplicationNotAliveCascade(c.Context(), "some-app-uuid", false)
+	c.Assert(err, tc.ErrorIsNil)
+
+	_, err = st.EnsureStorageAttachmentDeadCascadeIfUnprovisioned(c.Context(), saUUID)
+	c.Assert(err, tc.ErrorIsNil)
+	l, err := st.GetFilesystemAttachmentLife(c.Context(), fsaUUID)
+	c.Assert(err, tc.ErrorIsNil)
+	c.Check(l, tc.Equals, life.Dead)
+	l, err = st.GetFilesystemLife(c.Context(), fsUUID)
+	c.Assert(err, tc.ErrorIsNil)
+	c.Check(l, tc.Equals, life.Alive)
+	l, err = st.GetStorageInstanceLife(c.Context(), siUUID)
+	c.Assert(err, tc.ErrorIsNil)
+	c.Check(l, tc.Equals, life.Alive)
+}
+
+func (s *caasStorageSuite) TestUnprovisionedStorageRemovalAliveApplication(c *tc.C) {
+	s.checkUnprovisionedStorageRemovalLife(c, life.Alive, life.Dying, life.Dying)
+}
+
+func (s *caasStorageSuite) TestUnprovisionedStorageRemovalAliveUnit(c *tc.C) {
+	s.checkUnprovisionedStorageRemovalLife(c, life.Dying, life.Alive, life.Dying)
+}
+
+func (s *caasStorageSuite) TestUnprovisionedStorageRemovalAliveAttachment(c *tc.C) {
+	s.checkUnprovisionedStorageRemovalLife(c, life.Dying, life.Dying, life.Alive)
+}
+
+func (s *caasStorageSuite) checkUnprovisionedStorageRemovalLife(
+	c *tc.C, appLife, unitLife, attachmentLife life.Life,
+) {
+	_, saUUID := s.addAppUnitStorage(c)
+	_, err := s.DB().Exec("UPDATE application SET life_id = ?", appLife)
+	c.Assert(err, tc.ErrorIsNil)
+	_, err = s.DB().Exec("UPDATE unit SET life_id = ?", unitLife)
+	c.Assert(err, tc.ErrorIsNil)
+	s.setStorageAttachmentLife(c, saUUID, int(attachmentLife))
+	st := NewState(s.TxnRunnerFactory(), loggertesting.WrapCheckLog(c))
+
+	_, err = st.EnsureStorageAttachmentDeadCascadeIfUnprovisioned(c.Context(), saUUID)
+	c.Assert(err, tc.ErrorIs, removalerrors.EntityNotDead)
+	l, err := st.GetStorageAttachmentLife(c.Context(), saUUID)
+	c.Assert(err, tc.ErrorIsNil)
+	c.Check(l, tc.Equals, attachmentLife)
+}
+
+func (s *caasStorageSuite) TestModelIsImmutable(c *tc.C) {
+	_, err := s.DB().Exec("UPDATE model SET type = 'iaas'")
+	c.Assert(err, tc.ErrorMatches, "model table is immutable, only insertions are allowed")
+	_, err = s.DB().Exec("DELETE FROM model")
+	c.Assert(err, tc.ErrorMatches, "model table is immutable, only insertions are allowed")
+}
+
+func (s *storageModelTypeSuite) TestUnprovisionedStorageRemovalIAAS(c *tc.C) {
+	s.addModel(c, "iaas")
+	s.checkUnprovisionedStorageRemovalRequiresAcknowledgement(c)
+}
+
+func (s *storageModelTypeSuite) TestUnprovisionedStorageRemovalUnknownModelType(c *tc.C) {
+	s.addModel(c, "unknown")
+	s.checkUnprovisionedStorageRemovalRequiresAcknowledgement(c)
+}
+
+func (s *storageModelTypeSuite) TestUnprovisionedStorageRemovalMissingModel(c *tc.C) {
+	s.checkUnprovisionedStorageRemovalRequiresAcknowledgement(c)
+}
+
+func (s *storageModelTypeSuite) checkUnprovisionedStorageRemovalRequiresAcknowledgement(c *tc.C) {
+	siUUID, saUUID := s.addAppUnitStorage(c)
+	fsUUID, fsaUUID := s.addAttachedFilesystem(c)
+	s.addStorageInstanceFilesystem(c, siUUID, fsUUID)
+	s.setStorageAttachmentLife(c, saUUID, int(life.Dying))
+	_, err := s.DB().Exec(`
+UPDATE application SET life_id = 1;
+UPDATE unit SET life_id = 1;`)
+	c.Assert(err, tc.ErrorIsNil)
+	st := NewState(s.TxnRunnerFactory(), loggertesting.WrapCheckLog(c))
+
+	_, err = st.EnsureStorageAttachmentDeadCascadeIfUnprovisioned(c.Context(), saUUID)
+	c.Assert(err, tc.ErrorIs, removalerrors.EntityNotDead)
+	l, err := st.GetStorageAttachmentLife(c.Context(), saUUID)
+	c.Assert(err, tc.ErrorIsNil)
+	c.Check(l, tc.Equals, life.Dying)
+	l, err = st.GetFilesystemAttachmentLife(c.Context(), fsaUUID)
+	c.Assert(err, tc.ErrorIsNil)
+	c.Check(l, tc.Equals, life.Alive)
 }
 
 func (s *storageSuite) TestEnsureStorageInstanceNotAliveCascadeNotFound(c *tc.C) {
@@ -1882,7 +2124,7 @@ func (s *storageSuite) bindVolumeToStorageInstance(c *tc.C, siUUID, volUUID stri
 
 // addAppUnitStorage sets up a unit with a storage attachment.
 // The storage instance and attachment UUIDs are returned.
-func (s *storageSuite) addAppUnitStorage(c *tc.C) (string, string) {
+func (s *baseSuite) addAppUnitStorage(c *tc.C) (string, string) {
 	ctx := c.Context()
 
 	charm := "some-charm-uuid"
@@ -2022,7 +2264,7 @@ func (s *storageSuite) bindFilesystemToStorageInstance(c *tc.C, siUUID, fsUUID s
 
 // addAttachedFilesystem adds a filesystem, a net node and attaches the two.
 // It returns the filesystem UUID and the filesystem attachment UUID.
-func (s *storageSuite) addAttachedFilesystem(c *tc.C) (string, string) {
+func (s *baseSuite) addAttachedFilesystem(c *tc.C) (string, string) {
 	ctx := c.Context()
 
 	netNodeUUID := "some-net-node-uuid"
@@ -2119,7 +2361,7 @@ func (s *storageSuite) setStorageAttachmentDead(c *tc.C, saUUID string) {
 	c.Assert(err, tc.ErrorIsNil)
 }
 
-func (s *storageSuite) setStorageAttachmentLife(
+func (s *baseSuite) setStorageAttachmentLife(
 	c *tc.C, saUUID string, lifeId int,
 ) {
 	_, err := s.DB().Exec("UPDATE storage_attachment SET life_id = ? WHERE uuid = ?", lifeId, saUUID)
@@ -2174,15 +2416,6 @@ func (s *storageSuite) addStorageInstanceVolume(
 	_, err := s.DB().Exec(`
 INSERT INTO storage_instance_volume (storage_instance_uuid, storage_volume_uuid)
 VALUES (?, ?)`, siUUID, volUUID)
-	c.Assert(err, tc.ErrorIsNil)
-}
-
-func (s *storageSuite) addStorageInstanceFilesystem(
-	c *tc.C, siUUID, fsUUID string,
-) {
-	_, err := s.DB().Exec(`
-INSERT INTO storage_instance_filesystem (storage_instance_uuid, storage_filesystem_uuid)
-VALUES (?, ?)`, siUUID, fsUUID)
 	c.Assert(err, tc.ErrorIsNil)
 }
 

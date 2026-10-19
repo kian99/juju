@@ -350,6 +350,96 @@ WHERE  uuid = $entityUUID.uuid`, saLife, saUUID)
 	return life.Life(saLife.Life), nil
 }
 
+// EnsureStorageAttachmentDeadCascadeIfUnprovisioned completes detachment for an
+// unregistered CAAS unit whose application is being removed.
+// A pod may already exist in Kubernetes but be unable to schedule, leaving its
+// unit agent unable to start and register. Once the application is dying,
+// registration is rejected, so waiting for that agent to acknowledge detachment
+// would block removal indefinitely.
+//
+// The eligibility check and lifecycle cascade are performed in one transaction.
+// Filesystem attachments are also marked dead: they have no running host to
+// detach from, and unit removal would otherwise discard their host identity.
+//
+// [removalerrors.EntityNotDead] is returned if the attachment cannot be safely
+// acknowledged without a unit agent.
+func (st *State) EnsureStorageAttachmentDeadCascadeIfUnprovisioned(
+	ctx context.Context, uuid string,
+) (internal.CascadedStorageProvisionedAttachmentLives, error) {
+	db, err := st.DB(ctx)
+	if err != nil {
+		return internal.CascadedStorageProvisionedAttachmentLives{}, errors.Capture(err)
+	}
+
+	saUUID := entityUUID{UUID: uuid}
+	stmt, err := st.Prepare(`
+SELECT sa.uuid AS &entityUUID.uuid
+FROM storage_attachment AS sa
+JOIN unit AS u ON sa.unit_uuid = u.uuid
+JOIN application AS a ON u.application_uuid = a.uuid
+CROSS JOIN model AS m
+LEFT JOIN k8s_pod AS kp ON kp.unit_uuid = u.uuid
+WHERE sa.uuid = $entityUUID.uuid
+AND sa.life_id != 0
+AND u.life_id != 0
+AND a.life_id != 0
+AND m.type = 'caas'
+AND u.password_hash IS NULL
+AND kp.unit_uuid IS NULL
+`, saUUID)
+	if err != nil {
+		return internal.CascadedStorageProvisionedAttachmentLives{}, errors.Errorf(
+			"preparing unprovisioned storage attachment query: %w", err,
+		)
+	}
+	filesystemAttachmentsStmt, err := st.Prepare(`
+SELECT sfa.uuid AS &entityUUID.uuid
+FROM storage_attachment AS sa
+JOIN unit AS u ON sa.unit_uuid = u.uuid
+JOIN storage_instance_filesystem AS sif
+    ON sa.storage_instance_uuid = sif.storage_instance_uuid
+JOIN storage_filesystem_attachment AS sfa
+    ON sif.storage_filesystem_uuid = sfa.storage_filesystem_uuid
+    AND sfa.net_node_uuid = u.net_node_uuid
+WHERE sa.uuid = $entityUUID.uuid
+AND sfa.life_id != 2
+`, saUUID)
+	if err != nil {
+		return internal.CascadedStorageProvisionedAttachmentLives{}, errors.Errorf(
+			"preparing unprovisioned filesystem attachments query: %w", err,
+		)
+	}
+
+	var cascaded internal.CascadedStorageProvisionedAttachmentLives
+	err = db.Txn(ctx, func(ctx context.Context, tx *sqlair.TX) error {
+		if err := tx.Query(ctx, stmt, saUUID).Get(&saUUID); errors.Is(err, sqlair.ErrNoRows) {
+			return errors.New("storage attachment requires unit acknowledgement").
+				Add(removalerrors.EntityNotDead)
+		} else if err != nil {
+			return errors.Errorf("querying unprovisioned storage attachment: %w", err)
+		}
+		var filesystemAttachments entityUUIDs
+		if err := tx.Query(ctx, filesystemAttachmentsStmt, saUUID).GetAll(&filesystemAttachments); err != nil && !errors.Is(err, sqlair.ErrNoRows) {
+			return errors.Errorf("querying unprovisioned filesystem attachments: %w", err)
+		}
+		cascaded, err = st.ensureStorageAttachmentDead(ctx, tx, saUUID)
+		if err != nil {
+			return err
+		}
+		cascaded.FileSystemAttachmentUUIDs = filesystemAttachments.uuids()
+		for _, attachment := range filesystemAttachments {
+			if err := st.markFilesystemAttachmentAsDead(ctx, tx, attachment); err != nil {
+				return errors.Errorf("marking unprovisioned filesystem attachment dead: %w", err)
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return internal.CascadedStorageProvisionedAttachmentLives{}, errors.Capture(err)
+	}
+	return cascaded, nil
+}
+
 // EnsureStorageAttachmentDeadCascade ensures that the storage attachment is
 // dead and that all filesystem attachments, volume attachments and volume
 // attachment plans are dying.
@@ -1385,7 +1475,14 @@ func (st *State) MarkFilesystemAttachmentAsDead(
 		return errors.Capture(err)
 	}
 
-	fsaUUID := entityUUID{UUID: rUUID}
+	return errors.Capture(db.Txn(ctx, func(ctx context.Context, tx *sqlair.TX) error {
+		return st.markFilesystemAttachmentAsDead(ctx, tx, entityUUID{UUID: rUUID})
+	}))
+}
+
+func (st *State) markFilesystemAttachmentAsDead(
+	ctx context.Context, tx *sqlair.TX, fsaUUID entityUUID,
+) error {
 	existsStmt, err := st.Prepare(`
 SELECT &entityUUID.uuid
 FROM   storage_filesystem_attachment
@@ -1436,45 +1533,36 @@ WHERE  life_id = 1 AND uuid IN fs
 		)
 	}
 
-	err = db.Txn(ctx, func(ctx context.Context, tx *sqlair.TX) error {
-		err = tx.Query(ctx, existsStmt, fsaUUID).Get(&fsaUUID)
-		if errors.Is(err, sqlair.ErrNoRows) {
-			return storageprovisioningerrors.FilesystemAttachmentNotFound
-		} else if err != nil {
-			return errors.Errorf(
-				"running filesystem attachment exists query: %w", err,
-			)
-		}
+	err = tx.Query(ctx, existsStmt, fsaUUID).Get(&fsaUUID)
+	if errors.Is(err, sqlair.ErrNoRows) {
+		return storageprovisioningerrors.FilesystemAttachmentNotFound
+	} else if err != nil {
+		return errors.Errorf(
+			"running filesystem attachment exists query: %w", err,
+		)
+	}
 
-		err = tx.Query(ctx, markDeadStmt, fsaUUID).Run()
-		if err != nil {
-			return errors.Errorf(
-				"running mark filesystem attachment dead query: %w", err,
-			)
-		}
+	if err := tx.Query(ctx, markDeadStmt, fsaUUID).Run(); err != nil {
+		return errors.Errorf(
+			"running mark filesystem attachment dead query: %w", err,
+		)
+	}
 
-		var remaining count
-		err = tx.Query(ctx, remainingAttachmentsStmt, fsaUUID).Get(&remaining)
-		if err != nil {
-			return errors.Errorf(
-				"running remaining filesystem attachment query: %w", err,
-			)
-		}
-		if remaining.Count > 0 {
-			return nil
-		}
-
-		err = tx.Query(ctx, markDyingFilesystemDeadStmt, fsaUUID).Run()
-		if err != nil {
-			return errors.Errorf(
-				"running mark dying filesystem dead query: %w", err,
-			)
-		}
-
-		return nil
-	})
+	var remaining count
+	err = tx.Query(ctx, remainingAttachmentsStmt, fsaUUID).Get(&remaining)
 	if err != nil {
-		return errors.Capture(err)
+		return errors.Errorf(
+			"running remaining filesystem attachment query: %w", err,
+		)
+	}
+	if remaining.Count > 0 {
+		return nil
+	}
+
+	if err := tx.Query(ctx, markDyingFilesystemDeadStmt, fsaUUID).Run(); err != nil {
+		return errors.Errorf(
+			"running mark dying filesystem dead query: %w", err,
+		)
 	}
 
 	return nil

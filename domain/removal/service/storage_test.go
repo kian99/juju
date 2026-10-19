@@ -1573,9 +1573,78 @@ func (s *storageSuite) TestExecuteJobForStorageAttachmentDying(c *tc.C) {
 	s.modelState.EXPECT().GetStorageAttachmentLife(
 		gomock.Any(), j.EntityUUID,
 	).Return(life.Dying, nil)
+	s.modelState.EXPECT().EnsureStorageAttachmentDeadCascadeIfUnprovisioned(
+		gomock.Any(), j.EntityUUID,
+	).Return(internal.CascadedStorageProvisionedAttachmentLives{}, removalerrors.EntityNotDead)
 
 	err := s.newService(c).ExecuteJob(c.Context(), j)
 	c.Assert(err, tc.ErrorIs, removalerrors.EntityNotDead)
+}
+
+func (s *storageSuite) TestExecuteJobForStorageAttachmentUnprovisioned(c *tc.C) {
+	defer s.setupMocks(c).Finish()
+
+	j := newStorageAttachmentJob(c)
+	exp := s.modelState.EXPECT()
+	exp.GetStorageAttachmentLife(gomock.Any(), j.EntityUUID).Return(life.Dying, nil)
+	exp.EnsureStorageAttachmentDeadCascadeIfUnprovisioned(
+		gomock.Any(), j.EntityUUID,
+	).Return(internal.CascadedStorageProvisionedAttachmentLives{}, nil)
+	exp.DeleteStorageAttachment(gomock.Any(), j.EntityUUID).Return(nil)
+	exp.DeleteJob(gomock.Any(), j.UUID.String()).Return(nil)
+
+	err := s.newService(c).ExecuteJob(c.Context(), j)
+	c.Assert(err, tc.ErrorIsNil)
+}
+
+func (s *storageSuite) TestExecuteJobForStorageAttachmentUnprovisionedCascade(c *tc.C) {
+	defer s.setupMocks(c).Finish()
+
+	when := time.Now().UTC()
+	s.clock.EXPECT().Now().Return(when).AnyTimes()
+	j := newStorageAttachmentJob(c)
+	fsaUUID := tc.Must(c, storage.NewFilesystemAttachmentUUID).String()
+	vaUUID := tc.Must(c, storage.NewVolumeAttachmentUUID).String()
+	vapUUID := tc.Must(c, storage.NewVolumeAttachmentPlanUUID).String()
+
+	exp := s.modelState.EXPECT()
+	exp.GetStorageAttachmentLife(gomock.Any(), j.EntityUUID).Return(life.Dying, nil)
+	exp.EnsureStorageAttachmentDeadCascadeIfUnprovisioned(
+		gomock.Any(), j.EntityUUID,
+	).Return(internal.CascadedStorageProvisionedAttachmentLives{
+		FileSystemAttachmentUUIDs: []string{fsaUUID},
+		VolumeAttachmentUUIDs:     []string{vaUUID},
+		VolumeAttachmentPlanUUIDs: []string{vapUUID},
+	}, nil)
+	exp.FilesystemAttachmentScheduleRemoval(
+		gomock.Any(), tc.Bind(tc.IsNonZeroUUID), fsaUUID, false, when,
+	).Return(nil)
+	exp.VolumeAttachmentScheduleRemoval(
+		gomock.Any(), tc.Bind(tc.IsNonZeroUUID), vaUUID, false, when,
+	).Return(nil)
+	exp.VolumeAttachmentPlanScheduleRemoval(
+		gomock.Any(), tc.Bind(tc.IsNonZeroUUID), vapUUID, false, when,
+	).Return(nil)
+	exp.DeleteStorageAttachment(gomock.Any(), j.EntityUUID).Return(nil)
+	exp.DeleteJob(gomock.Any(), j.UUID.String()).Return(nil)
+
+	err := s.newService(c).ExecuteJob(c.Context(), j)
+	c.Assert(err, tc.ErrorIsNil)
+}
+
+func (s *storageSuite) TestExecuteJobForStorageAttachmentUnprovisionedError(c *tc.C) {
+	defer s.setupMocks(c).Finish()
+
+	j := newStorageAttachmentJob(c)
+	s.modelState.EXPECT().GetStorageAttachmentLife(
+		gomock.Any(), j.EntityUUID,
+	).Return(life.Dying, nil)
+	s.modelState.EXPECT().EnsureStorageAttachmentDeadCascadeIfUnprovisioned(
+		gomock.Any(), j.EntityUUID,
+	).Return(internal.CascadedStorageProvisionedAttachmentLives{}, errors.New("boom"))
+
+	err := s.newService(c).ExecuteJob(c.Context(), j)
+	c.Assert(err, tc.ErrorMatches, `ensuring storage attachment .* is dead: boom`)
 }
 
 func (s *storageSuite) TestExecuteJobForStorageAttachmentDyingForce(c *tc.C) {

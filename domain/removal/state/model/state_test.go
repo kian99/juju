@@ -168,16 +168,23 @@ func sequenceGenerator() func() string {
 }
 
 func (s *baseSuite) SetUpTest(c *tc.C) {
+	s.setUpTest(c)
+	s.addModel(c, "prod")
+}
+
+func (s *baseSuite) setUpTest(c *tc.C) {
 	s.ModelSuite.SetUpTest(c)
 	s.nextOperationID = sequenceGenerator()
 	s.now = time.Now().UTC()
+}
 
+func (s *baseSuite) addModel(c *tc.C, modelType string) {
 	modelUUID := uuid.MustNewUUID()
 	err := s.TxnRunner().StdTxn(c.Context(), func(ctx context.Context, tx *sql.Tx) error {
 		_, err := tx.ExecContext(ctx, `
 INSERT INTO model (uuid, controller_uuid, name, qualifier, type, cloud, cloud_type)
-VALUES (?, ?, "test", "iaas", "prod", "test-model", "ec2")
-		`, modelUUID.String(), internaltesting.ControllerTag.Id())
+VALUES (?, ?, "test", "iaas", ?, "test-model", "ec2")
+		`, modelUUID.String(), internaltesting.ControllerTag.Id(), modelType)
 		if err != nil {
 			return errors.Errorf("creating model: %w", err)
 		}

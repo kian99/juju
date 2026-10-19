@@ -80,6 +80,19 @@ type StorageState interface {
 		ctx context.Context, uuid string,
 	) (internal.CascadedStorageProvisionedAttachmentLives, error)
 
+	// EnsureStorageAttachmentDeadCascadeIfUnprovisioned performs the same
+	// cascade only for an unregistered CAAS unit in a non-alive application,
+	// also marking its filesystem attachments dead.
+	// It atomically checks that the unit is non-alive and has neither a pod
+	// registration in Juju nor an agent password. A Kubernetes pod can exist
+	// but remain unschedulable without its unit ever registering.
+	// Registration must reject non-alive applications, so no agent can
+	// subsequently acknowledge detachment.
+	// It returns [removalerrors.EntityNotDead] if these conditions are not met.
+	EnsureStorageAttachmentDeadCascadeIfUnprovisioned(
+		ctx context.Context, uuid string,
+	) (internal.CascadedStorageProvisionedAttachmentLives, error)
+
 	// DeleteStorageAttachment removes a unit storage attachment from the
 	// database completely. If the unit attached to the storage was its owner,
 	// then that record is deleted too.
@@ -378,10 +391,10 @@ func (s *Service) storageAttachmentScheduleRemoval(
 
 // processStorageAttachmentRemovalJob handles the fact that storage
 // attachments are endowed with the "life" characteristic.
-// This endowment is historical, but perhaps needless - no action is
-// really needed here except to delete the attachment.
-// Associated removal workflows should have been triggered when
-// we transitioned to "dying".
+// Graceful removal normally waits for the unit to acknowledge detachment.
+// An unschedulable pod, for example, never starts its unit agent.
+// An unregistered CAAS unit in a dying application cannot start an agent, so
+// its storage can be acknowledged here instead.
 func (s *Service) processStorageAttachmentRemovalJob(ctx context.Context, job removal.Job) error {
 	if job.RemovalType != removal.StorageAttachmentJob {
 		return errors.Errorf(
@@ -406,15 +419,17 @@ func (s *Service) processStorageAttachmentRemovalJob(ctx context.Context, job re
 		return errors.Errorf(
 			"storage attachment %q is alive", job.EntityUUID,
 		).Add(removalerrors.EntityStillAlive)
-	} else if !job.Force && l == life.Dying {
-		return errors.Errorf(
-			"storage attachment %q is not dead", job.EntityUUID,
-		).Add(removalerrors.EntityNotDead)
 	}
 
-	if job.Force && l == life.Dying {
-		cascade, err := s.modelState.EnsureStorageAttachmentDeadCascade(
-			ctx, job.EntityUUID)
+	if l == life.Dying {
+		var cascade internal.CascadedStorageProvisionedAttachmentLives
+		if job.Force {
+			cascade, err = s.modelState.EnsureStorageAttachmentDeadCascade(
+				ctx, job.EntityUUID)
+		} else {
+			cascade, err = s.modelState.EnsureStorageAttachmentDeadCascadeIfUnprovisioned(
+				ctx, job.EntityUUID)
+		}
 		if errors.Is(err, storageerrors.StorageAttachmentNotFound) {
 			return errors.Errorf(
 				"storage attachment %q not found", job.EntityUUID,
