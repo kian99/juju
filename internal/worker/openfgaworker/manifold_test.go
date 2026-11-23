@@ -12,6 +12,7 @@ import (
 	"errors"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	dqlitedriver "github.com/canonical/go-dqlite/v3/driver"
 	"github.com/juju/tc"
@@ -66,6 +67,35 @@ func (s *openFGASuite) TestGrantSurvivesRestart(c *tc.C) {
 	c.Check(changes.GetChanges()[0].GetOperation(), tc.Equals, openfgav1.TupleOperation_TUPLE_OPERATION_WRITE)
 }
 
+func (s *openFGASuite) TestGrantRetriesAtBeginWhenWriterSlotIsReserved(c *tc.C) {
+	ctx := c.Context()
+	node := startNode(c, c.MkDir(), "@"+uuid.MustNewUUID().String(), app.WithBusyTimeout(5*time.Millisecond))
+	_, srv := startOpenFGA(c, openImmediate(node))
+	check := newGrantCheck(c, srv, "user:alice")
+	grant := grantWrite(check, "user:alice")
+
+	holder, err := node.OpenImmediate(ctx, "openfga")
+	c.Assert(err, tc.ErrorIsNil)
+	defer holder.Close()
+	tx, err := holder.BeginTx(ctx, nil)
+	c.Assert(err, tc.ErrorIsNil)
+	defer tx.Rollback()
+
+	// The holder has not written anything. It already has the writer slot,
+	// so the grant hits OpenFGA's begin retry rather than failing at INSERT.
+	_, err = srv.Write(ctx, grant)
+	var dqliteErr dqlitedriver.Error
+	c.Assert(errors.As(err, &dqliteErr), tc.IsTrue, tc.Commentf("write error: %v", err))
+	c.Check(dqliteErr.Code, tc.Equals, dqlitedriver.ErrBusy)
+	c.Check(errors.Unwrap(err), tc.ErrorMatches, `.*sqlite busy error after [0-9]+ retries:.*`)
+	checkGrantRows(c, tx, 0)
+
+	c.Assert(tx.Rollback(), tc.ErrorIsNil)
+	_, err = srv.Write(ctx, grant)
+	c.Assert(err, tc.ErrorIsNil)
+	checkGrantRows(c, holder, 1)
+}
+
 func (s *openFGASuite) TestBusyCommitLeavesTransactionOnPooledConnection(c *tc.C) {
 	ctx := c.Context()
 	node := startNode(c, c.MkDir(), "@"+uuid.MustNewUUID().String())
@@ -75,7 +105,7 @@ func (s *openFGASuite) TestBusyCommitLeavesTransactionOnPooledConnection(c *tc.C
 	connector, err := observer.Driver().(driver.DriverContext).OpenConnector("openfga")
 	c.Assert(err, tc.ErrorIsNil)
 	fault := &busyCommitConnector{Connector: connector}
-	db := sql.OpenDB(fault)
+	db := sql.OpenDB(app.ImmediateTransactions(fault))
 	db.SetMaxOpenConns(1)
 	c.Cleanup(func() { c.Check(db.Close(), tc.ErrorIsNil) })
 	_, srv := startOpenFGA(c, func(context.Context) (*sql.DB, error) { return db, nil })
@@ -111,7 +141,9 @@ func (s *openFGASuite) TestBusyCommitLeavesTransactionOnPooledConnection(c *tc.C
 	c.Check(result.GetAllowed(), tc.IsFalse)
 }
 
-func checkGrantRows(c *tc.C, db *sql.DB, want int) {
+func checkGrantRows(c *tc.C, db interface {
+	QueryRowContext(context.Context, string, ...any) *sql.Row
+}, want int) {
 	var tuples, changes int
 	err := db.QueryRowContext(c.Context(), `SELECT
 		(SELECT COUNT(*) FROM tuple),
@@ -160,14 +192,18 @@ func grantWrite(check *openfgav1.CheckRequest, user string) *openfgav1.WriteRequ
 
 func start(c *tc.C, dir, address string) (*app.App, worker.Worker, *server.Server) {
 	node := startNode(c, dir, address)
-	w, srv := startOpenFGA(c, func(ctx context.Context) (*sql.DB, error) {
-		return node.Open(ctx, "openfga")
-	})
+	w, srv := startOpenFGA(c, openImmediate(node))
 	return node, w, srv
 }
 
-func startNode(c *tc.C, dir, address string) *app.App {
-	node, err := app.New(dir, app.WithAddress(address))
+func openImmediate(node *app.App) dbOpener {
+	return func(ctx context.Context) (*sql.DB, error) {
+		return node.OpenImmediate(ctx, "openfga")
+	}
+}
+
+func startNode(c *tc.C, dir, address string, opts ...app.Option) *app.App {
+	node, err := app.New(dir, append(opts, app.WithAddress(address))...)
 	c.Assert(err, tc.ErrorIsNil)
 	c.Cleanup(func() { c.Check(node.Close(), tc.ErrorIsNil) })
 	c.Assert(node.Ready(c.Context()), tc.ErrorIsNil)
@@ -210,24 +246,11 @@ type busyCommitConn struct {
 	failNextCommit *atomic.Bool
 }
 
-func (c *busyCommitConn) BeginTx(ctx context.Context, opts driver.TxOptions) (driver.Tx, error) {
-	tx, err := c.Conn.BeginTx(ctx, opts)
-	if err != nil {
-		return nil, err
-	}
-	return &busyCommitTx{Tx: tx, failNextCommit: c.failNextCommit}, nil
-}
-
-type busyCommitTx struct {
-	driver.Tx
-	failNextCommit *atomic.Bool
-}
-
-func (t *busyCommitTx) Commit() error {
-	if t.failNextCommit.Swap(false) {
+func (c *busyCommitConn) ExecContext(ctx context.Context, query string, args []driver.NamedValue) (driver.Result, error) {
+	if query == "COMMIT" && c.failNextCommit.Swap(false) {
 		// Simulate the gateway rejecting COMMIT before executing it. The
 		// preceding SQL and the open transaction are real Dqlite state.
-		return dqlitedriver.Error{Code: dqlitedriver.ErrBusy, Message: "checkpoint in progress"}
+		return nil, dqlitedriver.Error{Code: dqlitedriver.ErrBusy, Message: "checkpoint in progress"}
 	}
-	return t.Tx.Commit()
+	return c.Conn.ExecContext(ctx, query, args)
 }

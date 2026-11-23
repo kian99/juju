@@ -20,6 +20,7 @@ type OpenFGADBOpener interface {
 }
 
 // OpenOpenFGADB opens a separate pool on the controller's Dqlite cluster.
+// Explicit transactions on this pool reserve the writer slot at begin.
 func (w *dbWorker) OpenOpenFGADB(ctx context.Context) (*sql.DB, error) {
 	ctx, cancel := context.WithTimeout(w.catacomb.Context(ctx), dbOpenTimeout)
 	defer cancel()
@@ -37,7 +38,13 @@ func (w *dbWorker) OpenOpenFGADB(ctx context.Context) (*sql.DB, error) {
 	if dbApp == nil {
 		return nil, database.ErrDBAccessorDying
 	}
-	db, err := dbApp.Open(ctx, openFGADatabase)
+	opener, ok := dbApp.(interface {
+		OpenImmediate(context.Context, string) (*sql.DB, error)
+	})
+	if !ok {
+		return nil, errors.New("database application does not support immediate transactions")
+	}
+	db, err := opener.OpenImmediate(ctx, openFGADatabase)
 	if err != nil {
 		return nil, errors.Errorf("opening OpenFGA database: %w", err)
 	}

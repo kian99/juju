@@ -27,7 +27,8 @@ import (
 )
 
 // NewServer applies the upstream SQLite migrations and starts the embedded
-// server. It takes ownership of db even on failure. Call Close on success.
+// server. The caller supplies a Dqlite pool configured for immediate write
+// transactions. NewServer owns db even on failure. Call Close on success.
 func NewServer(ctx context.Context, db *sql.DB) (_ *server.Server, err error) {
 	defer func() {
 		if err != nil {
