@@ -78,8 +78,13 @@ func migrate(ctx context.Context, db *sql.DB) error {
 	return err
 }
 
+// translateError mirrors OpenFGA's SQLite constraint handling for Dqlite
+// errors, which the default modernc-based handler does not recognise.
 func translateError(err error, args ...any) error {
 	if code, ok := dqliteCode(err); ok && code == sqlite3.ErrConstraint {
+		// The hook accepts a tuple key as optional context for a duplicate
+		// tuple error. The pinned SQLite backend's batch insert passes no key
+		// and relies on ErrCollision to report a concurrent write conflict.
 		if len(args) > 0 {
 			if key, ok := args[0].(*openfgav1.TupleKey); ok {
 				return storage.InvalidWriteInputError(key, openfgav1.TupleOperation_TUPLE_OPERATION_WRITE)
@@ -87,9 +92,13 @@ func translateError(err error, args ...any) error {
 		}
 		return fmt.Errorf("%w: %w", storage.ErrCollision, err)
 	}
+	// Keep the upstream mapping for sql.ErrNoRows and wrap other SQL errors
+	// without losing their original cause.
 	return fgasqlite.HandleSQLError(err, args...)
 }
 
+// isBusy classifies errors at OpenFGA's existing retry sites. It does not
+// replay the enclosing transaction.
 func isBusy(err error) bool {
 	code, ok := dqliteCode(err)
 	return ok && (code == sqlite3.ErrBusy || code == sqlite3.ErrLocked)
@@ -100,5 +109,8 @@ func dqliteCode(err error) (sqlite3.ErrNo, bool) {
 	if !errors.As(err, &dqliteErr) {
 		return 0, false
 	}
+	// SQLite stores the primary result code in the low byte. For example,
+	// SQLITE_CONSTRAINT_UNIQUE and SQLITE_CONSTRAINT_PRIMARYKEY both reduce
+	// to SQLITE_CONSTRAINT; the upper bits identify the specific violation.
 	return sqlite3.ErrNo(dqliteErr.Code & 0xff), true
 }
