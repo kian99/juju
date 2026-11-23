@@ -44,26 +44,28 @@ import (
 	v1beta19 "k8s.io/client-go/kubernetes/typed/flowcontrol/v1beta1"
 	v1beta20 "k8s.io/client-go/kubernetes/typed/flowcontrol/v1beta2"
 	v1beta3 "k8s.io/client-go/kubernetes/typed/flowcontrol/v1beta3"
+	v1alpha13 "k8s.io/client-go/kubernetes/typed/lifecycle/v1alpha1"
 	v111 "k8s.io/client-go/kubernetes/typed/networking/v1"
 	v1beta110 "k8s.io/client-go/kubernetes/typed/networking/v1beta1"
 	v112 "k8s.io/client-go/kubernetes/typed/node/v1"
-	v1alpha13 "k8s.io/client-go/kubernetes/typed/node/v1alpha1"
+	v1alpha14 "k8s.io/client-go/kubernetes/typed/node/v1alpha1"
 	v1beta111 "k8s.io/client-go/kubernetes/typed/node/v1beta1"
 	v113 "k8s.io/client-go/kubernetes/typed/policy/v1"
 	v1beta112 "k8s.io/client-go/kubernetes/typed/policy/v1beta1"
 	v114 "k8s.io/client-go/kubernetes/typed/rbac/v1"
-	v1alpha14 "k8s.io/client-go/kubernetes/typed/rbac/v1alpha1"
+	v1alpha15 "k8s.io/client-go/kubernetes/typed/rbac/v1alpha1"
 	v1beta113 "k8s.io/client-go/kubernetes/typed/rbac/v1beta1"
 	v115 "k8s.io/client-go/kubernetes/typed/resource/v1"
 	v1alpha3 "k8s.io/client-go/kubernetes/typed/resource/v1alpha3"
 	v1beta114 "k8s.io/client-go/kubernetes/typed/resource/v1beta1"
 	v1beta21 "k8s.io/client-go/kubernetes/typed/resource/v1beta2"
 	v116 "k8s.io/client-go/kubernetes/typed/scheduling/v1"
-	v1alpha20 "k8s.io/client-go/kubernetes/typed/scheduling/v1alpha2"
+	v1alpha30 "k8s.io/client-go/kubernetes/typed/scheduling/v1alpha3"
 	v1beta115 "k8s.io/client-go/kubernetes/typed/scheduling/v1beta1"
 	v117 "k8s.io/client-go/kubernetes/typed/storage/v1"
-	v1alpha15 "k8s.io/client-go/kubernetes/typed/storage/v1alpha1"
+	v1alpha16 "k8s.io/client-go/kubernetes/typed/storage/v1alpha1"
 	v1beta116 "k8s.io/client-go/kubernetes/typed/storage/v1beta1"
+	v118 "k8s.io/client-go/kubernetes/typed/storagemigration/v1"
 	v1beta117 "k8s.io/client-go/kubernetes/typed/storagemigration/v1beta1"
 )
 
@@ -99,7 +101,7 @@ type MockInterfaceMockRecorder struct {
 	coordinationV1alpha2Expects          []*gomock.Call0_1[v1alpha2.CoordinationV1alpha2Interface]
 	coordinationV1beta1Expects           []*gomock.Call0_1[v1beta15.CoordinationV1beta1Interface]
 	coreV1Expects                        []*gomock.Call0_1[v17.CoreV1Interface]
-	discoveryExpects                     []*gomock.Call0_1[discovery.DiscoveryInterface]
+	discoveryExpects                     []*gomock.Call0_1[discovery.DiscoveryInterfaces]
 	discoveryV1Expects                   []*gomock.Call0_1[v18.DiscoveryV1Interface]
 	discoveryV1beta1Expects              []*gomock.Call0_1[v1beta16.DiscoveryV1beta1Interface]
 	eventsV1Expects                      []*gomock.Call0_1[v19.EventsV1Interface]
@@ -110,26 +112,28 @@ type MockInterfaceMockRecorder struct {
 	flowcontrolV1beta2Expects            []*gomock.Call0_1[v1beta20.FlowcontrolV1beta2Interface]
 	flowcontrolV1beta3Expects            []*gomock.Call0_1[v1beta3.FlowcontrolV1beta3Interface]
 	internalV1alpha1Expects              []*gomock.Call0_1[v1alpha10.InternalV1alpha1Interface]
+	lifecycleV1alpha1Expects             []*gomock.Call0_1[v1alpha13.LifecycleV1alpha1Interface]
 	networkingV1Expects                  []*gomock.Call0_1[v111.NetworkingV1Interface]
 	networkingV1beta1Expects             []*gomock.Call0_1[v1beta110.NetworkingV1beta1Interface]
 	nodeV1Expects                        []*gomock.Call0_1[v112.NodeV1Interface]
-	nodeV1alpha1Expects                  []*gomock.Call0_1[v1alpha13.NodeV1alpha1Interface]
+	nodeV1alpha1Expects                  []*gomock.Call0_1[v1alpha14.NodeV1alpha1Interface]
 	nodeV1beta1Expects                   []*gomock.Call0_1[v1beta111.NodeV1beta1Interface]
 	policyV1Expects                      []*gomock.Call0_1[v113.PolicyV1Interface]
 	policyV1beta1Expects                 []*gomock.Call0_1[v1beta112.PolicyV1beta1Interface]
 	rbacV1Expects                        []*gomock.Call0_1[v114.RbacV1Interface]
-	rbacV1alpha1Expects                  []*gomock.Call0_1[v1alpha14.RbacV1alpha1Interface]
+	rbacV1alpha1Expects                  []*gomock.Call0_1[v1alpha15.RbacV1alpha1Interface]
 	rbacV1beta1Expects                   []*gomock.Call0_1[v1beta113.RbacV1beta1Interface]
 	resourceV1Expects                    []*gomock.Call0_1[v115.ResourceV1Interface]
 	resourceV1alpha3Expects              []*gomock.Call0_1[v1alpha3.ResourceV1alpha3Interface]
 	resourceV1beta1Expects               []*gomock.Call0_1[v1beta114.ResourceV1beta1Interface]
 	resourceV1beta2Expects               []*gomock.Call0_1[v1beta21.ResourceV1beta2Interface]
 	schedulingV1Expects                  []*gomock.Call0_1[v116.SchedulingV1Interface]
-	schedulingV1alpha2Expects            []*gomock.Call0_1[v1alpha20.SchedulingV1alpha2Interface]
+	schedulingV1alpha3Expects            []*gomock.Call0_1[v1alpha30.SchedulingV1alpha3Interface]
 	schedulingV1beta1Expects             []*gomock.Call0_1[v1beta115.SchedulingV1beta1Interface]
 	storageV1Expects                     []*gomock.Call0_1[v117.StorageV1Interface]
-	storageV1alpha1Expects               []*gomock.Call0_1[v1alpha15.StorageV1alpha1Interface]
+	storageV1alpha1Expects               []*gomock.Call0_1[v1alpha16.StorageV1alpha1Interface]
 	storageV1beta1Expects                []*gomock.Call0_1[v1beta116.StorageV1beta1Interface]
+	storagemigrationV1Expects            []*gomock.Call0_1[v118.StoragemigrationV1Interface]
 	storagemigrationV1beta1Expects       []*gomock.Call0_1[v1beta117.StoragemigrationV1beta1Interface]
 }
 
@@ -542,7 +546,7 @@ func (mr *MockInterfaceMockRecorder) CoreV1() *MockInterfaceCoreV1Call {
 type MockInterfaceCoreV1Call = gomock.Call0_1[v17.CoreV1Interface]
 
 // Discovery mocks base method.
-func (m *MockInterface) Discovery() discovery.DiscoveryInterface {
+func (m *MockInterface) Discovery() discovery.DiscoveryInterfaces {
 	m.ctrl.T.Helper()
 	return gomock.Dispatch0_1(&m.recorder.discoveryExpects, m.ctrl, m, "Discovery")
 }
@@ -550,14 +554,14 @@ func (m *MockInterface) Discovery() discovery.DiscoveryInterface {
 // Discovery indicates an expected call of Discovery.
 func (mr *MockInterfaceMockRecorder) Discovery() *MockInterfaceDiscoveryCall {
 	mr.mock.ctrl.T.Helper()
-	call := gomock.NewCall0_1[discovery.DiscoveryInterface](mr.mock.ctrl.T, mr.mock, "Discovery")
+	call := gomock.NewCall0_1[discovery.DiscoveryInterfaces](mr.mock.ctrl.T, mr.mock, "Discovery")
 	mr.discoveryExpects = append(mr.discoveryExpects, call)
 	mr.mock.ctrl.Track(call.Call)
 	return call
 }
 
 // MockInterfaceDiscoveryCall is the typed call wrapper for Discovery.
-type MockInterfaceDiscoveryCall = gomock.Call0_1[discovery.DiscoveryInterface]
+type MockInterfaceDiscoveryCall = gomock.Call0_1[discovery.DiscoveryInterfaces]
 
 // DiscoveryV1 mocks base method.
 func (m *MockInterface) DiscoveryV1() v18.DiscoveryV1Interface {
@@ -739,6 +743,24 @@ func (mr *MockInterfaceMockRecorder) InternalV1alpha1() *MockInterfaceInternalV1
 // MockInterfaceInternalV1alpha1Call is the typed call wrapper for InternalV1alpha1.
 type MockInterfaceInternalV1alpha1Call = gomock.Call0_1[v1alpha10.InternalV1alpha1Interface]
 
+// LifecycleV1alpha1 mocks base method.
+func (m *MockInterface) LifecycleV1alpha1() v1alpha13.LifecycleV1alpha1Interface {
+	m.ctrl.T.Helper()
+	return gomock.Dispatch0_1(&m.recorder.lifecycleV1alpha1Expects, m.ctrl, m, "LifecycleV1alpha1")
+}
+
+// LifecycleV1alpha1 indicates an expected call of LifecycleV1alpha1.
+func (mr *MockInterfaceMockRecorder) LifecycleV1alpha1() *MockInterfaceLifecycleV1alpha1Call {
+	mr.mock.ctrl.T.Helper()
+	call := gomock.NewCall0_1[v1alpha13.LifecycleV1alpha1Interface](mr.mock.ctrl.T, mr.mock, "LifecycleV1alpha1")
+	mr.lifecycleV1alpha1Expects = append(mr.lifecycleV1alpha1Expects, call)
+	mr.mock.ctrl.Track(call.Call)
+	return call
+}
+
+// MockInterfaceLifecycleV1alpha1Call is the typed call wrapper for LifecycleV1alpha1.
+type MockInterfaceLifecycleV1alpha1Call = gomock.Call0_1[v1alpha13.LifecycleV1alpha1Interface]
+
 // NetworkingV1 mocks base method.
 func (m *MockInterface) NetworkingV1() v111.NetworkingV1Interface {
 	m.ctrl.T.Helper()
@@ -794,7 +816,7 @@ func (mr *MockInterfaceMockRecorder) NodeV1() *MockInterfaceNodeV1Call {
 type MockInterfaceNodeV1Call = gomock.Call0_1[v112.NodeV1Interface]
 
 // NodeV1alpha1 mocks base method.
-func (m *MockInterface) NodeV1alpha1() v1alpha13.NodeV1alpha1Interface {
+func (m *MockInterface) NodeV1alpha1() v1alpha14.NodeV1alpha1Interface {
 	m.ctrl.T.Helper()
 	return gomock.Dispatch0_1(&m.recorder.nodeV1alpha1Expects, m.ctrl, m, "NodeV1alpha1")
 }
@@ -802,14 +824,14 @@ func (m *MockInterface) NodeV1alpha1() v1alpha13.NodeV1alpha1Interface {
 // NodeV1alpha1 indicates an expected call of NodeV1alpha1.
 func (mr *MockInterfaceMockRecorder) NodeV1alpha1() *MockInterfaceNodeV1alpha1Call {
 	mr.mock.ctrl.T.Helper()
-	call := gomock.NewCall0_1[v1alpha13.NodeV1alpha1Interface](mr.mock.ctrl.T, mr.mock, "NodeV1alpha1")
+	call := gomock.NewCall0_1[v1alpha14.NodeV1alpha1Interface](mr.mock.ctrl.T, mr.mock, "NodeV1alpha1")
 	mr.nodeV1alpha1Expects = append(mr.nodeV1alpha1Expects, call)
 	mr.mock.ctrl.Track(call.Call)
 	return call
 }
 
 // MockInterfaceNodeV1alpha1Call is the typed call wrapper for NodeV1alpha1.
-type MockInterfaceNodeV1alpha1Call = gomock.Call0_1[v1alpha13.NodeV1alpha1Interface]
+type MockInterfaceNodeV1alpha1Call = gomock.Call0_1[v1alpha14.NodeV1alpha1Interface]
 
 // NodeV1beta1 mocks base method.
 func (m *MockInterface) NodeV1beta1() v1beta111.NodeV1beta1Interface {
@@ -884,7 +906,7 @@ func (mr *MockInterfaceMockRecorder) RbacV1() *MockInterfaceRbacV1Call {
 type MockInterfaceRbacV1Call = gomock.Call0_1[v114.RbacV1Interface]
 
 // RbacV1alpha1 mocks base method.
-func (m *MockInterface) RbacV1alpha1() v1alpha14.RbacV1alpha1Interface {
+func (m *MockInterface) RbacV1alpha1() v1alpha15.RbacV1alpha1Interface {
 	m.ctrl.T.Helper()
 	return gomock.Dispatch0_1(&m.recorder.rbacV1alpha1Expects, m.ctrl, m, "RbacV1alpha1")
 }
@@ -892,14 +914,14 @@ func (m *MockInterface) RbacV1alpha1() v1alpha14.RbacV1alpha1Interface {
 // RbacV1alpha1 indicates an expected call of RbacV1alpha1.
 func (mr *MockInterfaceMockRecorder) RbacV1alpha1() *MockInterfaceRbacV1alpha1Call {
 	mr.mock.ctrl.T.Helper()
-	call := gomock.NewCall0_1[v1alpha14.RbacV1alpha1Interface](mr.mock.ctrl.T, mr.mock, "RbacV1alpha1")
+	call := gomock.NewCall0_1[v1alpha15.RbacV1alpha1Interface](mr.mock.ctrl.T, mr.mock, "RbacV1alpha1")
 	mr.rbacV1alpha1Expects = append(mr.rbacV1alpha1Expects, call)
 	mr.mock.ctrl.Track(call.Call)
 	return call
 }
 
 // MockInterfaceRbacV1alpha1Call is the typed call wrapper for RbacV1alpha1.
-type MockInterfaceRbacV1alpha1Call = gomock.Call0_1[v1alpha14.RbacV1alpha1Interface]
+type MockInterfaceRbacV1alpha1Call = gomock.Call0_1[v1alpha15.RbacV1alpha1Interface]
 
 // RbacV1beta1 mocks base method.
 func (m *MockInterface) RbacV1beta1() v1beta113.RbacV1beta1Interface {
@@ -1009,23 +1031,23 @@ func (mr *MockInterfaceMockRecorder) SchedulingV1() *MockInterfaceSchedulingV1Ca
 // MockInterfaceSchedulingV1Call is the typed call wrapper for SchedulingV1.
 type MockInterfaceSchedulingV1Call = gomock.Call0_1[v116.SchedulingV1Interface]
 
-// SchedulingV1alpha2 mocks base method.
-func (m *MockInterface) SchedulingV1alpha2() v1alpha20.SchedulingV1alpha2Interface {
+// SchedulingV1alpha3 mocks base method.
+func (m *MockInterface) SchedulingV1alpha3() v1alpha30.SchedulingV1alpha3Interface {
 	m.ctrl.T.Helper()
-	return gomock.Dispatch0_1(&m.recorder.schedulingV1alpha2Expects, m.ctrl, m, "SchedulingV1alpha2")
+	return gomock.Dispatch0_1(&m.recorder.schedulingV1alpha3Expects, m.ctrl, m, "SchedulingV1alpha3")
 }
 
-// SchedulingV1alpha2 indicates an expected call of SchedulingV1alpha2.
-func (mr *MockInterfaceMockRecorder) SchedulingV1alpha2() *MockInterfaceSchedulingV1alpha2Call {
+// SchedulingV1alpha3 indicates an expected call of SchedulingV1alpha3.
+func (mr *MockInterfaceMockRecorder) SchedulingV1alpha3() *MockInterfaceSchedulingV1alpha3Call {
 	mr.mock.ctrl.T.Helper()
-	call := gomock.NewCall0_1[v1alpha20.SchedulingV1alpha2Interface](mr.mock.ctrl.T, mr.mock, "SchedulingV1alpha2")
-	mr.schedulingV1alpha2Expects = append(mr.schedulingV1alpha2Expects, call)
+	call := gomock.NewCall0_1[v1alpha30.SchedulingV1alpha3Interface](mr.mock.ctrl.T, mr.mock, "SchedulingV1alpha3")
+	mr.schedulingV1alpha3Expects = append(mr.schedulingV1alpha3Expects, call)
 	mr.mock.ctrl.Track(call.Call)
 	return call
 }
 
-// MockInterfaceSchedulingV1alpha2Call is the typed call wrapper for SchedulingV1alpha2.
-type MockInterfaceSchedulingV1alpha2Call = gomock.Call0_1[v1alpha20.SchedulingV1alpha2Interface]
+// MockInterfaceSchedulingV1alpha3Call is the typed call wrapper for SchedulingV1alpha3.
+type MockInterfaceSchedulingV1alpha3Call = gomock.Call0_1[v1alpha30.SchedulingV1alpha3Interface]
 
 // SchedulingV1beta1 mocks base method.
 func (m *MockInterface) SchedulingV1beta1() v1beta115.SchedulingV1beta1Interface {
@@ -1064,7 +1086,7 @@ func (mr *MockInterfaceMockRecorder) StorageV1() *MockInterfaceStorageV1Call {
 type MockInterfaceStorageV1Call = gomock.Call0_1[v117.StorageV1Interface]
 
 // StorageV1alpha1 mocks base method.
-func (m *MockInterface) StorageV1alpha1() v1alpha15.StorageV1alpha1Interface {
+func (m *MockInterface) StorageV1alpha1() v1alpha16.StorageV1alpha1Interface {
 	m.ctrl.T.Helper()
 	return gomock.Dispatch0_1(&m.recorder.storageV1alpha1Expects, m.ctrl, m, "StorageV1alpha1")
 }
@@ -1072,14 +1094,14 @@ func (m *MockInterface) StorageV1alpha1() v1alpha15.StorageV1alpha1Interface {
 // StorageV1alpha1 indicates an expected call of StorageV1alpha1.
 func (mr *MockInterfaceMockRecorder) StorageV1alpha1() *MockInterfaceStorageV1alpha1Call {
 	mr.mock.ctrl.T.Helper()
-	call := gomock.NewCall0_1[v1alpha15.StorageV1alpha1Interface](mr.mock.ctrl.T, mr.mock, "StorageV1alpha1")
+	call := gomock.NewCall0_1[v1alpha16.StorageV1alpha1Interface](mr.mock.ctrl.T, mr.mock, "StorageV1alpha1")
 	mr.storageV1alpha1Expects = append(mr.storageV1alpha1Expects, call)
 	mr.mock.ctrl.Track(call.Call)
 	return call
 }
 
 // MockInterfaceStorageV1alpha1Call is the typed call wrapper for StorageV1alpha1.
-type MockInterfaceStorageV1alpha1Call = gomock.Call0_1[v1alpha15.StorageV1alpha1Interface]
+type MockInterfaceStorageV1alpha1Call = gomock.Call0_1[v1alpha16.StorageV1alpha1Interface]
 
 // StorageV1beta1 mocks base method.
 func (m *MockInterface) StorageV1beta1() v1beta116.StorageV1beta1Interface {
@@ -1098,6 +1120,24 @@ func (mr *MockInterfaceMockRecorder) StorageV1beta1() *MockInterfaceStorageV1bet
 
 // MockInterfaceStorageV1beta1Call is the typed call wrapper for StorageV1beta1.
 type MockInterfaceStorageV1beta1Call = gomock.Call0_1[v1beta116.StorageV1beta1Interface]
+
+// StoragemigrationV1 mocks base method.
+func (m *MockInterface) StoragemigrationV1() v118.StoragemigrationV1Interface {
+	m.ctrl.T.Helper()
+	return gomock.Dispatch0_1(&m.recorder.storagemigrationV1Expects, m.ctrl, m, "StoragemigrationV1")
+}
+
+// StoragemigrationV1 indicates an expected call of StoragemigrationV1.
+func (mr *MockInterfaceMockRecorder) StoragemigrationV1() *MockInterfaceStoragemigrationV1Call {
+	mr.mock.ctrl.T.Helper()
+	call := gomock.NewCall0_1[v118.StoragemigrationV1Interface](mr.mock.ctrl.T, mr.mock, "StoragemigrationV1")
+	mr.storagemigrationV1Expects = append(mr.storagemigrationV1Expects, call)
+	mr.mock.ctrl.Track(call.Call)
+	return call
+}
+
+// MockInterfaceStoragemigrationV1Call is the typed call wrapper for StoragemigrationV1.
+type MockInterfaceStoragemigrationV1Call = gomock.Call0_1[v118.StoragemigrationV1Interface]
 
 // StoragemigrationV1beta1 mocks base method.
 func (m *MockInterface) StoragemigrationV1beta1() v1beta117.StoragemigrationV1beta1Interface {

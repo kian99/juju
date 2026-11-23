@@ -28,7 +28,7 @@ type MockApiExtensionsClientInterfaceMockRecorder struct {
 	mock                        *MockApiExtensionsClientInterface
 	apiextensionsV1Expects      []*gomock.Call0_1[v1.ApiextensionsV1Interface]
 	apiextensionsV1beta1Expects []*gomock.Call0_1[v1beta1.ApiextensionsV1beta1Interface]
-	discoveryExpects            []*gomock.Call0_1[discovery.DiscoveryInterface]
+	discoveryExpects            []*gomock.Call0_1[discovery.DiscoveryInterfaces]
 }
 
 // NewMockApiExtensionsClientInterface creates a new mock instance.
@@ -80,7 +80,7 @@ func (mr *MockApiExtensionsClientInterfaceMockRecorder) ApiextensionsV1beta1() *
 type MockApiExtensionsClientInterfaceApiextensionsV1beta1Call = gomock.Call0_1[v1beta1.ApiextensionsV1beta1Interface]
 
 // Discovery mocks base method.
-func (m *MockApiExtensionsClientInterface) Discovery() discovery.DiscoveryInterface {
+func (m *MockApiExtensionsClientInterface) Discovery() discovery.DiscoveryInterfaces {
 	m.ctrl.T.Helper()
 	return gomock.Dispatch0_1(&m.recorder.discoveryExpects, m.ctrl, m, "Discovery")
 }
@@ -88,11 +88,11 @@ func (m *MockApiExtensionsClientInterface) Discovery() discovery.DiscoveryInterf
 // Discovery indicates an expected call of Discovery.
 func (mr *MockApiExtensionsClientInterfaceMockRecorder) Discovery() *MockApiExtensionsClientInterfaceDiscoveryCall {
 	mr.mock.ctrl.T.Helper()
-	call := gomock.NewCall0_1[discovery.DiscoveryInterface](mr.mock.ctrl.T, mr.mock, "Discovery")
+	call := gomock.NewCall0_1[discovery.DiscoveryInterfaces](mr.mock.ctrl.T, mr.mock, "Discovery")
 	mr.discoveryExpects = append(mr.discoveryExpects, call)
 	mr.mock.ctrl.Track(call.Call)
 	return call
 }
 
 // MockApiExtensionsClientInterfaceDiscoveryCall is the typed call wrapper for Discovery.
-type MockApiExtensionsClientInterfaceDiscoveryCall = gomock.Call0_1[discovery.DiscoveryInterface]
+type MockApiExtensionsClientInterfaceDiscoveryCall = gomock.Call0_1[discovery.DiscoveryInterfaces]

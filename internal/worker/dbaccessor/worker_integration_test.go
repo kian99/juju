@@ -136,6 +136,29 @@ func (s *integrationSuite) TestWorkerAccessingControllerDB(c *tc.C) {
 	c.Assert(db, tc.NotNil)
 }
 
+func (s *integrationSuite) TestOpenFGADatabaseUsesSeparateHandle(c *tc.C) {
+	opener, ok := s.worker.(dbaccessor.OpenFGADBOpener)
+	c.Assert(ok, tc.IsTrue)
+	ctx := c.Context()
+	db, err := opener.OpenOpenFGADB(ctx)
+	c.Assert(err, tc.ErrorIsNil)
+	defer db.Close()
+	_, err = db.ExecContext(ctx, "CREATE TABLE openfga_test (id INT PRIMARY KEY)")
+	c.Assert(err, tc.ErrorIsNil)
+	c.Assert(db.Close(), tc.ErrorIsNil)
+
+	_, err = s.db.ExecContext(ctx, "CREATE TABLE openfga_test (id INT PRIMARY KEY)")
+	c.Assert(err, tc.ErrorIsNil)
+	reopened, err := opener.OpenOpenFGADB(ctx)
+	c.Assert(err, tc.ErrorIsNil)
+	defer reopened.Close()
+	_, err = reopened.ExecContext(ctx, "INSERT INTO openfga_test VALUES (1)")
+	c.Assert(err, tc.ErrorIsNil)
+	var count int
+	c.Assert(s.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM openfga_test").Scan(&count), tc.ErrorIsNil)
+	c.Check(count, tc.Equals, 0)
+}
+
 func (s *integrationSuite) TestWorkerAccessingUnknownDB(c *tc.C) {
 	_, err := s.dbGetter.GetDB(c.Context(), "foo")
 	c.Assert(err, tc.ErrorMatches, `.*"foo": database not found`)

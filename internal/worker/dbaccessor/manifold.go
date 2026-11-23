@@ -191,13 +191,15 @@ func dbAccessorOutput(in worker.Worker, out any) error {
 	case *coredatabase.DBDeleter:
 		var target coredatabase.DBDeleter = w
 		*out = target
+	case *OpenFGADBOpener:
+		*out = w
 	case *coredatabase.ClusterDescriber:
 		var target coredatabase.ClusterDescriber = &clusterDetailer{
 			nodeManager: w.cfg.NodeManager,
 		}
 		*out = target
 	default:
-		return errors.Errorf("expected output of *database.DBGetter or *database.DBDeleter, got %T", out)
+		return errors.Errorf("unsupported dbaccessor output type %T", out)
 	}
 	return nil
 }

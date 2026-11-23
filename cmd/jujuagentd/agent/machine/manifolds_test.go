@@ -151,6 +151,7 @@ func (s *ManifoldsSuite) TestManifoldNamesIAAS(c *tc.C) {
 			"object-store-s3-caller",
 			"object-store-services",
 			"object-store",
+			"openfga",
 			"provider-services",
 			"provider-tracker",
 			"proxy-config-updater",
@@ -258,6 +259,7 @@ func (s *ManifoldsSuite) TestManifoldNamesK8s(c *tc.C) {
 			"object-store-s3-caller",
 			"object-store-services",
 			"object-store",
+			"openfga",
 			"provider-services",
 			"provider-tracker",
 			"proxy-config-updater",
@@ -371,6 +373,7 @@ func (s *ManifoldsSuite) TestMigrationGuardsUsed(c *tc.C) {
 		"object-store-s3-caller",
 		"object-store-services",
 		"object-store",
+		"openfga",
 		"provider-services",
 		"provider-tracker",
 		"query-logger",
@@ -450,6 +453,7 @@ func (*ManifoldsSuite) TestSingularGuardsUsed(c *tc.C) {
 		"change-stream-pruner",
 		"external-controller-updater",
 		"object-store-drainer",
+		"openfga",
 		"secret-backend-rotate",
 	)
 
@@ -946,7 +950,23 @@ func (s *ManifoldsSuite) TestManifoldsDependenciesK8s(c *tc.C) {
 	)
 }
 
+var openFGADependencies = []string{
+	"agent",
+	"change-stream",
+	"controller-agent-config",
+	"controller-trace",
+	"db-accessor",
+	"file-notify-watcher",
+	"is-controller-flag",
+	"is-primary-controller-flag",
+	"lease-manager",
+	"query-logger",
+	"state-config-watcher",
+	"trace-services",
+}
+
 var expectedMachineManifoldsWithDependenciesIAAS = map[string][]string{
+	"openfga": openFGADependencies,
 	"backup-creator": {
 		"agent",
 		"api-caller",
@@ -2642,6 +2662,7 @@ var expectedMachineManifoldsWithDependenciesIAAS = map[string][]string{
 	},
 }
 var expectedMachineManifoldsWithDependenciesK8s = map[string][]string{
+	"openfga": openFGADependencies,
 	"object-store-guard": {
 		"agent",
 		"api-remote-caller",

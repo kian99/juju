@@ -106,6 +106,7 @@ import (
 	"github.com/juju/juju/internal/worker/objectstoreguard"
 	"github.com/juju/juju/internal/worker/objectstores3caller"
 	"github.com/juju/juju/internal/worker/objectstoreservices"
+	"github.com/juju/juju/internal/worker/openfgaworker"
 	"github.com/juju/juju/internal/worker/providerservices"
 	"github.com/juju/juju/internal/worker/providertracker"
 	"github.com/juju/juju/internal/worker/proxyupdater"
@@ -879,6 +880,8 @@ func commonManifolds(config ManifoldsConfig) dependency.Manifolds {
 			NewMetricsCollector:       dbaccessor.NewMetricsCollector,
 			NewNodeManager:            dbaccessor.NewNodeManager,
 		})),
+
+		openFGAName: ifPrimaryController(openfgaworker.Manifold(dbAccessorName)),
 
 		fileNotifyWatcherName: ifController(filenotifywatcher.Manifold(filenotifywatcher.ManifoldConfig{
 			Clock:             config.Clock,
@@ -1741,6 +1744,7 @@ const (
 	controllerTraceName                = "controller-trace"
 	controlSocketName                  = "control-socket"
 	dbAccessorName                     = "db-accessor"
+	openFGAName                        = "openfga"
 	deployerName                       = "deployer"
 	diskManagerName                    = "disk-manager"
 	domainServicesName                 = "domain-services"
